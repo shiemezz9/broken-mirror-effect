@@ -1160,18 +1160,156 @@
       ctx.restore();
     }
 
-    function makeFlatPsdFromCanvas() {
-      const width = canvas.width;
-      const height = canvas.height;
-      const pixels = ctx.getImageData(0, 0, width, height).data;
-      const headerSize = 26;
-      const sectionSizes = 4 + 4 + 4;
-      const imageDataSize = 2 + width * height * 3;
-      const buffer = new ArrayBuffer(headerSize + sectionSizes + imageDataSize);
+    function makeSourceCanvas() {
+      const layer = document.createElement('canvas');
+      layer.width = sourceImage.width;
+      layer.height = sourceImage.height;
+      return layer;
+    }
+
+    function copyCurrentPreviewToSourceCanvas() {
+      const layer = makeSourceCanvas();
+      const layerCtx = layer.getContext('2d');
+      const dpr = canvas.width / Math.max(1, lastCanvasWidth);
+      layerCtx.drawImage(
+        canvas,
+        fit.x * dpr,
+        fit.y * dpr,
+        fit.w * dpr,
+        fit.h * dpr,
+        0,
+        0,
+        sourceImage.width,
+        sourceImage.height
+      );
+      return layer;
+    }
+
+    function capturePreviewLayer(renderLayer) {
+      ctx.save();
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.restore();
+      renderLayer();
+      return copyCurrentPreviewToSourceCanvas();
+    }
+
+    function drawClippedEffectLayer(renderLayer) {
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(fit.x, fit.y, fit.w, fit.h);
+      ctx.clip();
+      renderLayer();
+      ctx.restore();
+    }
+
+    function drawAllImpactHoles() {
+      const s = getSelectedSettings();
+      impactOutlines.forEach(outline => {
+        const ps = outline.settings || s;
+        drawImpactHole(outline.points, ps.holeColor);
+      });
+    }
+
+    function drawAllCrackStrokes() {
+      const s = getSelectedSettings();
+      const crackLayerOffsets = [
+        { x: 0, y: 0 },
+        { x: .16, y: .08 },
+        { x: -.12, y: .14 }
+      ];
+      crackLayerOffsets.forEach(offset => {
+        ctx.save();
+        ctx.translate(offset.x, offset.y);
+        crackPaths.forEach(path => {
+          const ps = path.settings || s;
+          drawCrackPath(path, ps.crackWidth, { core: ps.crackColor }, ps.edgeGlow);
+        });
+        impactCrossCracks.forEach(path => {
+          const ps = path.settings || s;
+          drawCrackPath(path, ps.crackWidth, { core: ps.crackColor }, ps.edgeGlow);
+        });
+
+        crackPaths.forEach(path => {
+          const ps = path.settings || s;
+          drawCrackRoot(path, ps.crackWidth, ps.crackColor);
+        });
+        impactOutlines.forEach(outline => {
+          const ps = outline.settings || s;
+          drawImpactOutline(outline.points, ps.crackWidth, ps.crackColor);
+        });
+        ctx.restore();
+      });
+    }
+
+    function makeLayeredPsd() {
+      if (!shards.length) generateCracks();
+      const width = sourceImage.width;
+      const height = sourceImage.height;
+      const background = makeSourceCanvas();
+      background.getContext('2d').drawImage(sourceImage, 0, 0, width, height);
+      const baseImage = capturePreviewLayer(() => {
+        for (const shard of shards) {
+          clipImageWithTransform(shard.poly, shard, (shard.settings || getSelectedSettings()).aberration);
+        }
+      });
+      const impactHoles = capturePreviewLayer(() => drawClippedEffectLayer(drawAllImpactHoles));
+      const cracks = capturePreviewLayer(() => drawClippedEffectLayer(drawAllCrackStrokes));
+      const highlights = capturePreviewLayer(() => drawClippedEffectLayer(() => {
+        drawIrregularShardHighlights(shards, getSelectedSettings().edgeGlow);
+      }));
+      draw();
+      return makePsdFromLayers(width, height, [
+        { name: 'Background', unicodeName: '背景图', canvas: background, opacity: 255 },
+        { name: 'Base Image', unicodeName: '底图', canvas: baseImage, opacity: 255 },
+        { name: 'Impact Holes', unicodeName: '破碎点', canvas: impactHoles, opacity: 255 },
+        { name: 'Cracks', unicodeName: '裂纹', canvas: cracks, opacity: 255 },
+        { name: 'Highlights', unicodeName: '高光层', canvas: highlights, opacity: 255 }
+      ]);
+    }
+
+    function makePsdFromLayers(width, height, layers) {
+      const planeSize = width * height;
+      const layerPixels = layers.map(layer => ({
+        ...layer,
+        pixels: layer.canvas.getContext('2d').getImageData(0, 0, width, height).data
+      }));
+      const psdLayerPixels = [...layerPixels].reverse();
+      const composite = makeSourceCanvas();
+      const compositeCtx = composite.getContext('2d');
+      layerPixels.forEach(layer => compositeCtx.drawImage(layer.canvas, 0, 0));
+      const compositePixels = compositeCtx.getImageData(0, 0, width, height).data;
+      const pascalNameSize = name => {
+        const nameLength = Math.min(255, name.length);
+        return 1 + nameLength + ((4 - ((1 + nameLength) % 4)) % 4);
+      };
+      const unicodeNameBlockSize = layer => {
+        if (!layer.unicodeName) return 0;
+        const dataLength = 4 + layer.unicodeName.length * 2;
+        return 12 + dataLength + (dataLength % 2);
+      };
+      const layerExtraSize = layer => 8 + pascalNameSize(layer.name) + unicodeNameBlockSize(layer);
+      const layerRecordSize = layer => {
+        return 58 + layerExtraSize(layer);
+      };
+      const channelImageSize = 2 + planeSize;
+      const layerInfoSizeRaw = 2
+        + psdLayerPixels.reduce((sum, layer) => sum + layerRecordSize(layer), 0)
+        + psdLayerPixels.length * 4 * channelImageSize;
+      const layerInfoSize = layerInfoSizeRaw + (layerInfoSizeRaw % 2);
+      const layerMaskSectionSize = 4 + layerInfoSize + 4;
+      const imageDataSize = 2 + planeSize * 3;
+      const buffer = new ArrayBuffer(26 + 4 + 4 + layerMaskSectionSize + imageDataSize);
       const view = new DataView(buffer);
+      const bytes = new Uint8Array(buffer);
       let offset = 0;
       const writeAscii = text => {
         for (let i = 0; i < text.length; i++) view.setUint8(offset++, text.charCodeAt(i));
+      };
+      const writeU8 = value => view.setUint8(offset++, value);
+      const writeI16 = value => {
+        view.setInt16(offset, value, false);
+        offset += 2;
       };
       const writeU16 = value => {
         view.setUint16(offset, value, false);
@@ -1181,10 +1319,32 @@
         view.setUint32(offset, value, false);
         offset += 4;
       };
+      const writeLayerName = name => {
+        const cleanName = name.replace(/[^\x20-\x7e]/g, '').slice(0, 255);
+        writeU8(cleanName.length);
+        for (let i = 0; i < cleanName.length; i++) writeU8(cleanName.charCodeAt(i));
+        while (offset % 4) writeU8(0);
+      };
+      const writeUnicodeLayerName = name => {
+        if (!name) return;
+        const dataLength = 4 + name.length * 2;
+        writeAscii('8BIM');
+        writeAscii('luni');
+        writeU32(dataLength);
+        writeU32(name.length);
+        for (let i = 0; i < name.length; i++) writeU16(name.charCodeAt(i));
+        if (dataLength % 2) writeU8(0);
+      };
+      const writeChannelPlane = (pixels, channelIndex) => {
+        writeU16(0);
+        for (let i = 0, p = 0; i < planeSize; i++, p += 4) {
+          bytes[offset++] = pixels[p + channelIndex];
+        }
+      };
 
       writeAscii('8BPS');
       writeU16(1);
-      for (let i = 0; i < 6; i++) view.setUint8(offset++, 0);
+      for (let i = 0; i < 6; i++) writeU8(0);
       writeU16(3);
       writeU32(height);
       writeU32(width);
@@ -1192,15 +1352,45 @@
       writeU16(3);
       writeU32(0);
       writeU32(0);
-      writeU32(0);
-      writeU16(0);
 
-      const planeSize = width * height;
-      const bytes = new Uint8Array(buffer);
+      writeU32(layerMaskSectionSize);
+      writeU32(layerInfoSize);
+      writeI16(psdLayerPixels.length);
+      psdLayerPixels.forEach(layer => {
+        writeU32(0);
+        writeU32(0);
+        writeU32(height);
+        writeU32(width);
+        writeU16(4);
+        [-1, 0, 1, 2].forEach(channelId => {
+          writeI16(channelId);
+          writeU32(channelImageSize);
+        });
+        writeAscii('8BIM');
+        writeAscii('norm');
+        writeU8(layer.opacity);
+        writeU8(0);
+        writeU8(8);
+        writeU8(0);
+        writeU32(layerExtraSize(layer));
+        writeU32(0);
+        writeU32(0);
+        writeLayerName(layer.name);
+        writeUnicodeLayerName(layer.unicodeName);
+      });
+      psdLayerPixels.forEach(layer => {
+        writeChannelPlane(layer.pixels, 3);
+        writeChannelPlane(layer.pixels, 0);
+        writeChannelPlane(layer.pixels, 1);
+        writeChannelPlane(layer.pixels, 2);
+      });
+      if (layerInfoSizeRaw % 2) writeU8(0);
+      writeU32(0);
+
+      writeU16(0);
       for (let channel = 0; channel < 3; channel++) {
-        const planeOffset = offset + channel * planeSize;
         for (let i = 0, p = 0; i < planeSize; i++, p += 4) {
-          bytes[planeOffset + i] = pixels[p + channel];
+          bytes[offset++] = compositePixels[p + channel];
         }
       }
       return new Blob([buffer], { type: 'image/vnd.adobe.photoshop' });
@@ -1545,7 +1735,7 @@
       if (!sourceImage) return;
       const link = document.createElement('a');
       link.download = 'broken-mirror-effect.psd';
-      link.href = URL.createObjectURL(makeFlatPsdFromCanvas());
+      link.href = URL.createObjectURL(makeLayeredPsd());
       link.click();
       setTimeout(() => URL.revokeObjectURL(link.href), 1000);
     });
