@@ -1160,9 +1160,10 @@
 
     function drawIrregularShardHighlights(shards, amount) {
       if (amount <= 0) return;
-      const strength = amount / 100;
+      const solidHighlightColor = getSelectedSettings().crackColor || '#ffffff';
       const clusterCount = Math.floor(stableNoise(seed * .013 + amount * .17) * 3);
       ctx.save();
+      ctx.globalAlpha = 1;
       ctx.lineCap = 'round';
       ctx.lineJoin = 'round';
       for (let cluster = 0; cluster < clusterCount; cluster++) {
@@ -1189,7 +1190,7 @@
           ctx.beginPath();
           ctx.moveTo(p0.x, p0.y);
           ctx.lineTo(p1.x, p1.y);
-          ctx.strokeStyle = `rgba(255,255,255,${(.045 + stableNoise(key + i * 13.9) * .2) * strength})`;
+          ctx.strokeStyle = solidHighlightColor;
           ctx.lineWidth = .35 + stableNoise(key + i * 17.4) * .9;
           ctx.stroke();
         }
