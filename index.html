@@ -567,6 +567,7 @@
     }
 
     function getSelectedSettings() {
+      if (selectedImpactIndex === -1 && impactSettings.length) return impactSettings[0];
       return impactSettings[selectedImpactIndex] || getSettings();
     }
 
@@ -588,12 +589,29 @@
     }
 
     function saveSelectedSettings() {
+      if (selectedImpactIndex === -1) {
+        const settings = getSettings();
+        impactSettings = impactSettings.map(() => cloneSettings(settings));
+        return;
+      }
       if (selectedImpactIndex < 0) return;
       impactSettings[selectedImpactIndex] = getSettings();
     }
 
     function renderImpactTabs() {
       impactTabs.innerHTML = '';
+      const allButton = document.createElement('button');
+      allButton.type = 'button';
+      allButton.textContent = '所有破碎点';
+      allButton.className = selectedImpactIndex === -1 ? 'active' : '';
+      allButton.disabled = !centers.length;
+      allButton.addEventListener('click', () => {
+        selectedImpactIndex = -1;
+        setControlsFromSettings(getSelectedSettings());
+        renderImpactTabs();
+        draw();
+      });
+      impactTabs.appendChild(allButton);
       centers.forEach((_, index) => {
         const button = document.createElement('button');
         button.type = 'button';
@@ -607,7 +625,7 @@
         });
         impactTabs.appendChild(button);
       });
-      deleteImpact.disabled = centers.length <= 1;
+      deleteImpact.disabled = centers.length <= 1 || selectedImpactIndex === -1;
     }
 
     function updateValues() {
