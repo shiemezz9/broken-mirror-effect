@@ -381,6 +381,7 @@
         <button class="btn" id="loadDemo" type="button">载入示例</button>
         <p class="section-title">破碎点</p>
         <div class="impact-tabs" id="impactTabs" aria-label="破碎点列表"></div>
+        <button class="btn" id="addImpact" type="button">新增破碎点</button>
         <button class="btn" id="deleteImpact" type="button">删除当前破碎点</button>
         <p class="hint">也可以把图片拖到右侧画布。</p>
       </section>
@@ -475,6 +476,7 @@
     const sizeLabel = document.getElementById('sizeLabel');
     const fileInput = document.getElementById('fileInput');
     const impactTabs = document.getElementById('impactTabs');
+    const addImpact = document.getElementById('addImpact');
     const deleteImpact = document.getElementById('deleteImpact');
 
     const controls = {
@@ -510,6 +512,7 @@
     let centerRatios = [];
     let impactSettings = [];
     let selectedImpactIndex = -1;
+    let addingImpact = false;
     let crackTone = 'white';
     let seed = Math.floor(Math.random() * 999999);
     let shards = [];
@@ -615,6 +618,7 @@
       allButton.disabled = !centers.length;
       allButton.addEventListener('click', () => {
         selectedImpactIndex = -1;
+        addingImpact = true;
         setControlsFromSettings(getSelectedSettings());
         renderImpactTabs();
         draw();
@@ -627,13 +631,15 @@
         button.className = index === selectedImpactIndex ? 'active' : '';
         button.addEventListener('click', () => {
           selectedImpactIndex = index;
+          addingImpact = false;
           setControlsFromSettings(getSelectedSettings());
           renderImpactTabs();
           draw();
         });
         impactTabs.appendChild(button);
       });
-      deleteImpact.disabled = centers.length <= 1 || selectedImpactIndex === -1;
+      addImpact.textContent = addingImpact ? '点击画面放置新破碎点' : '新增破碎点';
+      deleteImpact.disabled = centers.length <= 1 || selectedImpactIndex === -1 || addingImpact;
     }
 
     function updateValues() {
@@ -684,7 +690,19 @@
       center = point;
       impactSettings.push(cloneSettings(getSettings()));
       selectedImpactIndex = centers.length - 1;
+      addingImpact = false;
       renderImpactTabs();
+    }
+
+    function moveSelectedCenterToCanvasPoint(x, y) {
+      if (selectedImpactIndex < 0 || !centerRatios[selectedImpactIndex]) return;
+      const point = imagePointFromCanvas(x, y);
+      centerRatios[selectedImpactIndex] = {
+        x: fit ? clamp((point.x - fit.x) / fit.w, 0, 1) : .5,
+        y: fit ? clamp((point.y - fit.y) / fit.h, 0, 1) : .5
+      };
+      syncCenterToFit();
+      center = centers[selectedImpactIndex] || null;
     }
 
     function syncCenterToFit() {
@@ -1254,6 +1272,7 @@
           centerRatios = [{ x: .5, y: .5 }];
           impactSettings = [cloneSettings(getSettings())];
           selectedImpactIndex = 0;
+          addingImpact = false;
           syncCenterToFit();
           renderImpactTabs();
           setControlsFromSettings(getSelectedSettings());
@@ -1306,6 +1325,7 @@
         centerRatios = [{ x: .54, y: .36 }];
         impactSettings = [cloneSettings(getSettings())];
         selectedImpactIndex = 0;
+        addingImpact = false;
         syncCenterToFit();
         renderImpactTabs();
         setControlsFromSettings(getSelectedSettings());
@@ -1337,7 +1357,11 @@
       const rect = canvas.getBoundingClientRect();
       const x = event.clientX - rect.left;
       const y = event.clientY - rect.top;
-      addCenterFromCanvasPoint(x, y);
+      if (addingImpact || selectedImpactIndex === -1 || !centers.length) {
+        addCenterFromCanvasPoint(x, y);
+      } else {
+        moveSelectedCenterToCanvasPoint(x, y);
+      }
       shards = [];
       generateCracks();
       draw();
@@ -1402,11 +1426,20 @@
       draw();
     });
 
+    addImpact.addEventListener('click', () => {
+      addingImpact = true;
+      selectedImpactIndex = -1;
+      setControlsFromSettings(getSelectedSettings());
+      renderImpactTabs();
+      statusEl.textContent = '点击画面放置新破碎点';
+    });
+
     deleteImpact.addEventListener('click', () => {
       if (centers.length <= 1 || selectedImpactIndex < 0) return;
       centerRatios.splice(selectedImpactIndex, 1);
       impactSettings.splice(selectedImpactIndex, 1);
       selectedImpactIndex = Math.min(selectedImpactIndex, centerRatios.length - 1);
+      addingImpact = false;
       syncCenterToFit();
       center = centers[selectedImpactIndex] || null;
       setControlsFromSettings(getSelectedSettings());
