@@ -407,6 +407,10 @@
           <label for="impactSmoothness">破碎点边缘顺滑度 <span class="value" id="impactSmoothnessValue">30</span></label>
           <input id="impactSmoothness" type="range" min="0" max="100" value="30">
         </div>
+        <div class="control">
+          <label for="randomSeed">随机种子 <span class="value" id="randomSeedValue">500</span></label>
+          <input id="randomSeed" type="range" min="1" max="999" value="500">
+        </div>
       </section>
 
       <section class="section">
@@ -479,6 +483,7 @@
       crackWidth: document.getElementById('crackWidth'),
       impactSize: document.getElementById('impactSize'),
       impactSmoothness: document.getElementById('impactSmoothness'),
+      randomSeed: document.getElementById('randomSeed'),
       crackColor: document.getElementById('crackColor'),
       holeColor: document.getElementById('holeColor'),
       edgeGlow: document.getElementById('edgeGlow'),
@@ -491,6 +496,7 @@
       crackWidth: document.getElementById('crackWidthValue'),
       impactSize: document.getElementById('impactSizeValue'),
       impactSmoothness: document.getElementById('impactSmoothnessValue'),
+      randomSeed: document.getElementById('randomSeedValue'),
       crackColor: document.getElementById('crackColorValue'),
       holeColor: document.getElementById('holeColorValue'),
       edgeGlow: document.getElementById('edgeGlowValue'),
@@ -559,6 +565,7 @@
         crackWidth: Number(controls.crackWidth.value),
         impactSize: Number(controls.impactSize.value),
         impactSmoothness: Number(controls.impactSmoothness.value),
+        randomSeed: Number(controls.randomSeed.value),
         crackColor: controls.crackColor.value,
         holeColor: controls.holeColor.value,
         edgeGlow: Number(controls.edgeGlow.value),
@@ -581,6 +588,7 @@
       controls.crackWidth.value = settings.crackWidth;
       controls.impactSize.value = settings.impactSize;
       controls.impactSmoothness.value = settings.impactSmoothness;
+      controls.randomSeed.value = settings.randomSeed;
       controls.crackColor.value = settings.crackColor;
       controls.holeColor.value = settings.holeColor;
       controls.edgeGlow.value = settings.edgeGlow;
@@ -635,6 +643,7 @@
       values.crackWidth.textContent = s.crackWidth.toFixed(1);
       values.impactSize.textContent = s.impactSize.toFixed(1);
       values.impactSmoothness.textContent = s.impactSmoothness;
+      values.randomSeed.textContent = s.randomSeed;
       values.crackColor.textContent = s.crackColor;
       values.holeColor.textContent = s.holeColor;
       values.edgeGlow.textContent = s.edgeGlow;
@@ -742,7 +751,8 @@
       impactCrossCracks = [];
       impactOutlines = [];
       centers.forEach((point, index) => {
-        generateCrackCluster(point, seed + index * 1031, centers, impactSettings[index] || getSettings());
+        const settings = impactSettings[index] || getSettings();
+        generateCrackCluster(point, seed + settings.randomSeed * 409 + index * 1031, centers, settings);
       });
     }
 
@@ -1328,7 +1338,6 @@
       const x = event.clientX - rect.left;
       const y = event.clientY - rect.top;
       addCenterFromCanvasPoint(x, y);
-      seed = Math.floor(Math.random() * 999999);
       shards = [];
       generateCracks();
       draw();
@@ -1410,7 +1419,15 @@
 
     document.getElementById('randomize').addEventListener('click', () => {
       if (!sourceImage) return;
-      seed = Math.floor(Math.random() * 999999);
+      if (selectedImpactIndex === -1) {
+        impactSettings = impactSettings.map(settings => ({
+          ...settings,
+          randomSeed: 1 + Math.floor(Math.random() * 999)
+        }));
+      } else if (impactSettings[selectedImpactIndex]) {
+        impactSettings[selectedImpactIndex].randomSeed = 1 + Math.floor(Math.random() * 999);
+      }
+      setControlsFromSettings(getSelectedSettings());
       shards = [];
       generateCracks();
       draw();
