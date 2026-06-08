@@ -376,6 +376,10 @@
           <label for="impactSize">破碎点大小 <span class="value" id="impactSizeValue">8</span></label>
           <input id="impactSize" type="range" min="0.2" max="20" value="8" step="0.2">
         </div>
+        <div class="control">
+          <label for="impactSmoothness">破碎点边缘顺滑度 <span class="value" id="impactSmoothnessValue">30</span></label>
+          <input id="impactSmoothness" type="range" min="0" max="100" value="30">
+        </div>
       </section>
 
       <section class="section">
@@ -445,6 +449,7 @@
       breakPower: document.getElementById('breakPower'),
       crackWidth: document.getElementById('crackWidth'),
       impactSize: document.getElementById('impactSize'),
+      impactSmoothness: document.getElementById('impactSmoothness'),
       crackColor: document.getElementById('crackColor'),
       holeColor: document.getElementById('holeColor'),
       edgeGlow: document.getElementById('edgeGlow'),
@@ -456,6 +461,7 @@
       breakPower: document.getElementById('breakPowerValue'),
       crackWidth: document.getElementById('crackWidthValue'),
       impactSize: document.getElementById('impactSizeValue'),
+      impactSmoothness: document.getElementById('impactSmoothnessValue'),
       crackColor: document.getElementById('crackColorValue'),
       holeColor: document.getElementById('holeColorValue'),
       edgeGlow: document.getElementById('edgeGlowValue'),
@@ -520,6 +526,7 @@
         breakPower: Number(controls.breakPower.value),
         crackWidth: Number(controls.crackWidth.value),
         impactSize: Number(controls.impactSize.value),
+        impactSmoothness: Number(controls.impactSmoothness.value),
         crackColor: controls.crackColor.value,
         holeColor: controls.holeColor.value,
         edgeGlow: Number(controls.edgeGlow.value),
@@ -533,6 +540,7 @@
       values.breakPower.textContent = s.breakPower;
       values.crackWidth.textContent = s.crackWidth.toFixed(1);
       values.impactSize.textContent = s.impactSize.toFixed(1);
+      values.impactSmoothness.textContent = s.impactSmoothness;
       values.crackColor.textContent = s.crackColor;
       values.holeColor.textContent = s.holeColor;
       values.edgeGlow.textContent = s.edgeGlow;
@@ -640,7 +648,6 @@
       ];
       const maxR = Math.max(...corners.map(([x, y]) => Math.hypot(x - cx, y - cy))) * 1.08;
       const rayCount = s.rayCount;
-      const angleBase = rnd() * Math.PI * 2;
       const impactNorm = s.impactSize / 20;
       const impactRadius = 1.2 + Math.min(fit.w, fit.h) * (.18 * impactNorm * impactNorm);
       const distanceLayerCount = Math.floor(rnd() * 3);
@@ -653,11 +660,39 @@
       innerRings.sort((a, b) => a - b);
       const rings = [impactRadius, ...innerRings, maxR * 1.12];
       const rayPoints = [];
+      const minAngleGap = Math.PI * 2 / rayCount * .38;
+      const angleWeights = [];
+      for (let i = 0; i < rayCount; i++) {
+        const clusterBias = rnd() > .72 ? .2 + rnd() * .42 : 1;
+        angleWeights.push((.35 + Math.pow(rnd(), 2.2) * 2.4) * clusterBias);
+      }
+      const angleWeightSum = angleWeights.reduce((sum, weight) => sum + weight, 0);
+      const flexibleAngle = Math.PI * 2 - minAngleGap * rayCount;
+      const rayAngles = [];
+      let currentAngle = rnd() * Math.PI * 2;
+      for (let i = 0; i < rayCount; i++) {
+        const gap = minAngleGap + flexibleAngle * angleWeights[i] / angleWeightSum;
+        currentAngle += i ? gap : gap * rnd();
+        rayAngles.push(currentAngle);
+      }
+      const rayStrengths = rayAngles.map(() => .52 + Math.pow(rnd(), 1.7) * 1.25);
+      const lowDensityStar = clamp((18 - rayCount) / 9, 0, 1);
+      const impactSmoothness = s.impactSmoothness / 100;
+      const impactRadii = [];
+      for (let i = 0; i < rayCount; i++) {
+        const randomRough = .7 + rnd() * .74;
+        const spikeRough = rnd() > .48
+          ? 1.18 + rnd() * .72
+          : .34 + rnd() * .28;
+        const offbeatSpike = rnd() > .76 ? 1.42 + rnd() * .72 : spikeRough;
+        const jaggedRough = lerp(randomRough, offbeatSpike, lowDensityStar);
+        const smoothRough = .92 + rnd() * .16;
+        impactRadii.push(impactRadius * lerp(jaggedRough, smoothRough, impactSmoothness));
+      }
 
       for (let i = 0; i < rayCount; i++) {
-        const uneven = (rnd() - .5) * .32 + Math.sin(i * 1.7) * .06;
-        const angle = angleBase + (Math.PI * 2 * i / rayCount) + uneven;
-        const length = maxR * (1.18 + rnd() * .2);
+        const angle = rayAngles[i] + (rnd() - .5) * .045;
+        const length = maxR * (1.02 + rayStrengths[i] * .18 + rnd() * .28);
         const basePath = makeCurvedPath(cx, cy, angle, length, rings.length - 1, rnd, .23 + rnd() * .28);
         const points = [];
         const minGap = Math.max(impactRadius * .6, maxR * .02);
@@ -673,7 +708,7 @@
             return value;
           });
         const rayRings = [
-          impactRadius * (.72 + rnd() * .72),
+          impactRadii[i],
           ...innerRayRadii,
           maxR * (1.12 + rnd() * .16)
         ];
@@ -721,7 +756,11 @@
       }
 
       for (let i = 0; i < rayCount; i++) {
-        crackPaths.push({ points: rayPoints[i], kind: i % 4 === 0 ? 'major' : 'radial', weight: .65 + rnd() * .7 });
+        crackPaths.push({
+          points: rayPoints[i],
+          kind: rayStrengths[i] > 1.28 ? 'major' : 'radial',
+          weight: .48 + rayStrengths[i] * .72
+        });
         if (rnd() > .35) {
           const start = pointOnPath(rayPoints[i], .18 + rnd() * .46);
           const baseAngle = Math.atan2(start.y - cy, start.x - cx);
@@ -872,11 +911,12 @@
       const maxDim = Math.max(fit.w, fit.h);
       const nodeWidths = points.map((p, index) => {
         const distanceFromCenter = center ? Math.hypot(p.x - center.x, p.y - center.y) : maxDim;
-        const taper = ['web', 'impact-cross'].includes(kind) ? .95 : clamp(distanceFromCenter / (maxDim * .22), .12, 1);
+        const solidFineKind = ['web', 'impact-cross', 'branch'].includes(kind);
+        const taper = solidFineKind ? .95 : clamp(distanceFromCenter / (maxDim * .36), .06, 1);
         const lowFreq = stableNoise(index * 1.73 + p.x * .003 + p.y * .004);
         const highFreq = stableNoise(index * 7.11 + p.x * .011 + p.y * .009);
-        const randomWidth = .72 + lowFreq * .62 + (highFreq - .5) * .18;
-        return Math.max(.34, mainWidth * taper * randomWidth);
+        const randomWidth = solidFineKind ? 1 : .64 + lowFreq * .5 + (highFreq - .5) * .14;
+        return Math.max(solidFineKind ? .28 : .18, mainWidth * taper * randomWidth);
       });
       for (let i = 1; i < nodeWidths.length - 1; i++) {
         nodeWidths[i] = nodeWidths[i - 1] * .22 + nodeWidths[i] * .56 + nodeWidths[i + 1] * .22;
@@ -897,7 +937,7 @@
           const p0 = pointOnSegment(a, b, t0);
           const p1 = pointOnSegment(a, b, t1);
           const pathT = (i - 1 + (t0 + t1) * .5) / (points.length - 1);
-          const endFade = ['web', 'impact-cross'].includes(kind) ? 1 : clamp((1 - pathT) / .14, .16, 1);
+          const endFade = ['web', 'impact-cross', 'branch'].includes(kind) ? 1 : clamp((1 - pathT) / .14, .16, 1);
           const segmentWidth = Math.max(.24, lerp(nodeWidths[i - 1], nodeWidths[i], tm) * endFade);
           drawSegment(p0, p1, 0, 0, colors.core, segmentWidth);
         }
