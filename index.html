@@ -388,6 +388,10 @@
       <section class="section">
         <p class="section-title">裂纹</p>
         <div class="control">
+          <label for="randomSeed">随机种子 <span class="value" id="randomSeedValue">500</span></label>
+          <input id="randomSeed" type="range" min="1" max="999" value="500">
+        </div>
+        <div class="control">
           <label for="rayCount">裂纹密度 <span class="value" id="rayCountValue">18</span></label>
           <input id="rayCount" type="range" min="9" max="34" value="18">
         </div>
@@ -406,10 +410,6 @@
         <div class="control">
           <label for="impactSmoothness">破碎点边缘顺滑度 <span class="value" id="impactSmoothnessValue">30</span></label>
           <input id="impactSmoothness" type="range" min="0" max="100" value="30">
-        </div>
-        <div class="control">
-          <label for="randomSeed">随机种子 <span class="value" id="randomSeedValue">500</span></label>
-          <input id="randomSeed" type="range" min="1" max="999" value="500">
         </div>
       </section>
 
