@@ -935,15 +935,16 @@
         }
       }
 
-      const webCount = Math.floor(rayCount * .48);
+      const widthPressure = clamp((s.crackWidth - 2.5) / 5.5, 0, 1);
+      const webCount = Math.floor(rayCount * (.48 - widthPressure * .18));
       for (let i = 0; i < webCount; i++) {
         const a = Math.floor(rnd() * rayCount);
         const b = (a + (rnd() > .5 ? 1 : rayCount - 1)) % rayCount;
-        const t1 = .08 + rnd() * .46;
-        const t2 = clamp(t1 + (rnd() - .5) * .07, .07, .58);
+        const t1 = .08 + rnd() * (.46 - widthPressure * .18);
+        const t2 = clamp(t1 + (rnd() - .5) * (.07 - widthPressure * .035), .07, .58 - widthPressure * .18);
         const p1 = pointOnPath(rayPoints[a], t1);
         const p2 = pointOnPath(rayPoints[b], t2);
-        if (Math.hypot(p2.x - p1.x, p2.y - p1.y) > maxR * .22) continue;
+        if (Math.hypot(p2.x - p1.x, p2.y - p1.y) > maxR * (.22 - widthPressure * .09)) continue;
         const angle1 = Math.atan2(p1.y - cy, p1.x - cx);
         const angle2 = Math.atan2(p2.y - cy, p2.x - cx);
         const midAngle = Math.atan2(Math.sin(angle1) + Math.sin(angle2), Math.cos(angle1) + Math.cos(angle2));
@@ -955,17 +956,17 @@
         crackPaths.push({ points: [p1, mid, p2], center: clusterCenter, settings: s, kind: 'web', weight: .18 + rnd() * .26 });
       }
 
-      const impactCrossCount = Math.floor(rayCount * (1.05 + s.impactSize / 18));
+      const impactCrossCount = Math.floor(rayCount * ((1.05 - widthPressure * .24) + s.impactSize / 18));
       for (let i = 0; i < impactCrossCount; i++) {
         const a = Math.floor(rnd() * rayCount);
         const b = (a + (rnd() > .5 ? 1 : rayCount - 1)) % rayCount;
         const nearBias = Math.pow(rnd(), 1.9);
-        const t1 = .008 + nearBias * .18;
-        const t2 = clamp(t1 + (rnd() - .5) * (.035 + nearBias * .035), .006, .24);
+        const t1 = .008 + nearBias * (.18 - widthPressure * .07);
+        const t2 = clamp(t1 + (rnd() - .5) * ((.035 + nearBias * .035) * (1 - widthPressure * .55)), .006, .24 - widthPressure * .08);
         const p1 = pointOnPath(rayPoints[a], t1);
         const p2 = pointOnPath(rayPoints[b], t2);
         const len = Math.hypot(p2.x - p1.x, p2.y - p1.y);
-        if (len > impactRadius * (3.15 + nearBias * 1.6)) continue;
+        if (len > impactRadius * ((3.15 + nearBias * 1.6) * (1 - widthPressure * .38))) continue;
         const r1 = Math.hypot(p1.x - cx, p1.y - cy);
         const r2 = Math.hypot(p2.x - cx, p2.y - cy);
         const angle1 = Math.atan2(p1.y - cy, p1.x - cx);
@@ -981,7 +982,7 @@
           center: clusterCenter,
           settings: s,
           kind: 'impact-cross',
-          weight: .34 + rnd() * .9
+          weight: (.34 + rnd() * .9) * (1 - widthPressure * .22)
         });
       }
     }
