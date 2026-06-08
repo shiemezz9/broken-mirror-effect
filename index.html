@@ -1244,24 +1244,37 @@
       ctx.clip();
 
       drawIrregularShardHighlights(shards, s.edgeGlow);
-
-      crackPaths.forEach(path => {
-        const ps = path.settings || s;
-        drawCrackPath(path, ps.crackWidth, { core: ps.crackColor }, ps.edgeGlow);
-      });
-      impactCrossCracks.forEach(path => {
-        const ps = path.settings || s;
-        drawCrackPath(path, ps.crackWidth, { core: ps.crackColor }, ps.edgeGlow);
-      });
-
-      crackPaths.forEach(path => {
-        const ps = path.settings || s;
-        drawCrackRoot(path, ps.crackWidth, ps.crackColor);
-      });
       impactOutlines.forEach(outline => {
         const ps = outline.settings || s;
         drawImpactHole(outline.points, ps.holeColor);
-        drawImpactOutline(outline.points, ps.crackWidth, ps.crackColor);
+      });
+
+      const crackLayerOffsets = [
+        { x: 0, y: 0 },
+        { x: .16, y: .08 },
+        { x: -.12, y: .14 }
+      ];
+      crackLayerOffsets.forEach(offset => {
+        ctx.save();
+        ctx.translate(offset.x, offset.y);
+        crackPaths.forEach(path => {
+          const ps = path.settings || s;
+          drawCrackPath(path, ps.crackWidth, { core: ps.crackColor }, ps.edgeGlow);
+        });
+        impactCrossCracks.forEach(path => {
+          const ps = path.settings || s;
+          drawCrackPath(path, ps.crackWidth, { core: ps.crackColor }, ps.edgeGlow);
+        });
+
+        crackPaths.forEach(path => {
+          const ps = path.settings || s;
+          drawCrackRoot(path, ps.crackWidth, ps.crackColor);
+        });
+        impactOutlines.forEach(outline => {
+          const ps = outline.settings || s;
+          drawImpactOutline(outline.points, ps.crackWidth, ps.crackColor);
+        });
+        ctx.restore();
       });
       ctx.restore();
 
