@@ -1052,19 +1052,13 @@
       return a + (b - a) * t;
     }
 
-    function drawSegment(a, b, offsetX, offsetY, strokeStyle, lineWidth) {
-      const dx = b.x - a.x;
-      const dy = b.y - a.y;
-      const len = Math.hypot(dx, dy) || 1;
-      const overlap = Math.min(4.5, Math.max(.9, lineWidth * .78));
-      const ex = dx / len * overlap;
-      const ey = dy / len * overlap;
+    function strokePolyline(points, strokeStyle, lineWidth) {
       ctx.beginPath();
-      ctx.moveTo(a.x - ex + offsetX, a.y - ey + offsetY);
-      ctx.lineTo(b.x + ex + offsetX, b.y + ey + offsetY);
+      drawPolyline(points);
       ctx.strokeStyle = strokeStyle;
       ctx.lineWidth = lineWidth;
       ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
       ctx.stroke();
     }
 
@@ -1077,18 +1071,18 @@
       const kindScale = kind === 'major' ? 1.46 : kind === 'web' ? .52 : kind === 'impact-cross' ? .72 : kind === 'branch' ? .7 : 1;
       const mainWidth = Math.max(.55, width * kindScale * weight);
       const maxDim = Math.max(fit.w, fit.h);
+      const solidFineKind = ['web', 'impact-cross', 'branch'].includes(kind);
       const nodeWidths = points.map((p, index) => {
         const distanceFromCenter = crackCenter ? Math.hypot(p.x - crackCenter.x, p.y - crackCenter.y) : maxDim;
-        const solidFineKind = ['web', 'impact-cross', 'branch'].includes(kind);
-        const normalizedDistance = clamp(distanceFromCenter / (maxDim * .44), 0, 1);
-        const taper = solidFineKind ? (kind === 'impact-cross' ? .88 : .95) : clamp(Math.pow(normalizedDistance, 1.48), .028, 1);
+        const normalizedDistance = clamp(distanceFromCenter / (maxDim * .52), 0, 1);
+        const taper = solidFineKind ? (kind === 'impact-cross' ? .88 : .95) : clamp(Math.pow(normalizedDistance, 1.75), .012, 1);
         const lowFreq = stableNoise(index * 1.73 + p.x * .003 + p.y * .004);
         const highFreq = stableNoise(index * 7.11 + p.x * .011 + p.y * .009);
         const crackNoise = Array.isArray(crack) ? .5 : stableNoise((crack.weight || 1) * 13.7 + points.length * 2.9);
         const randomWidth = solidFineKind
           ? (kind === 'impact-cross' ? .72 + highFreq * .58 : 1)
           : .54 + lowFreq * .76 + (highFreq - .5) * .18 + crackNoise * .34;
-        return Math.max(solidFineKind ? .22 : .08, mainWidth * taper * randomWidth);
+        return Math.max(solidFineKind ? .22 : .035, mainWidth * taper * randomWidth);
       });
       for (let i = 1; i < nodeWidths.length - 1; i++) {
         nodeWidths[i] = nodeWidths[i - 1] * .24 + nodeWidths[i] * .52 + nodeWidths[i + 1] * .24;
@@ -1097,22 +1091,21 @@
       ctx.lineCap = 'round';
       ctx.lineJoin = 'round';
 
-      for (let i = 1; i < points.length; i++) {
-        const a = points[i - 1];
-        const b = points[i];
-        const len = Math.hypot(b.x - a.x, b.y - a.y);
-        const steps = clamp(Math.ceil(len / 18), 5, 18);
-        for (let step = 0; step < steps; step++) {
-          const t0 = step / steps;
-          const t1 = (step + 1) / steps;
-          const tm = smoothstep((t0 + t1) * .5);
-          const p0 = pointOnSegment(a, b, t0);
-          const p1 = pointOnSegment(a, b, t1);
-          const pathT = (i - 1 + (t0 + t1) * .5) / (points.length - 1);
-          const endFade = ['web', 'impact-cross', 'branch'].includes(kind) ? 1 : clamp((1 - pathT) / .14, .16, 1);
-          const segmentWidth = Math.max(.24, lerp(nodeWidths[i - 1], nodeWidths[i], tm) * endFade);
-          drawSegment(p0, p1, 0, 0, colors.core, segmentWidth);
-        }
+      if (solidFineKind) {
+        strokePolyline(points, colors.core, Math.max(.22, nodeWidths.reduce((sum, value) => sum + value, 0) / nodeWidths.length));
+        ctx.restore();
+        return;
+      }
+
+      const outerWidth = Math.max(.16, Math.max(...nodeWidths));
+      const innerWidth = Math.max(.04, Math.min(...nodeWidths) * 1.2);
+      strokePolyline(points, colors.core, outerWidth);
+      if (points.length > 1 && crackCenter) {
+        const rootEnd = pointOnPath(points, .22);
+        const rootPath = [points[0], rootEnd];
+        const rootMaskColor = Array.isArray(crack) ? getSelectedSettings().holeColor : ((crack.settings && crack.settings.holeColor) || getSelectedSettings().holeColor);
+        strokePolyline(rootPath, rootMaskColor, Math.max(innerWidth * 1.25, outerWidth * .82));
+        strokePolyline(rootPath, colors.core, innerWidth);
       }
       ctx.restore();
     }
@@ -1121,14 +1114,14 @@
       if (Array.isArray(crack) || !['major', 'radial'].includes(crack.kind) || crack.points.length < 2) return;
       const a = crack.points[0];
       const b = crack.points[1];
-      const mid = pointOnSegment(a, b, .58);
+      const mid = pointOnSegment(a, b, .45);
       ctx.save();
       ctx.lineCap = 'round';
       ctx.beginPath();
       ctx.moveTo(a.x, a.y);
       ctx.lineTo(mid.x, mid.y);
       ctx.strokeStyle = color;
-      ctx.lineWidth = Math.max(.42, width * .58 * crack.weight);
+      ctx.lineWidth = Math.max(.08, width * .12 * crack.weight);
       ctx.stroke();
       ctx.restore();
     }
