@@ -186,6 +186,30 @@
       font-weight: 760;
     }
 
+    .impact-tabs {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+
+    .impact-tabs button {
+      min-height: 32px;
+      padding: 0 10px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      color: var(--muted);
+      background: #14161b;
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: 720;
+    }
+
+    .impact-tabs button.active {
+      border-color: rgba(24,199,185,.8);
+      color: #061211;
+      background: var(--accent);
+    }
+
     .actions {
       display: grid;
       grid-template-columns: 1fr 1fr;
@@ -355,6 +379,9 @@
         <p class="section-title">图片</p>
         <input id="fileInput" type="file" accept="image/*">
         <button class="btn" id="loadDemo" type="button">载入示例</button>
+        <p class="section-title">破碎点</p>
+        <div class="impact-tabs" id="impactTabs" aria-label="破碎点列表"></div>
+        <button class="btn" id="deleteImpact" type="button">删除当前破碎点</button>
         <p class="hint">也可以把图片拖到右侧画布。</p>
       </section>
 
@@ -443,6 +470,8 @@
     const statusEl = document.getElementById('status');
     const sizeLabel = document.getElementById('sizeLabel');
     const fileInput = document.getElementById('fileInput');
+    const impactTabs = document.getElementById('impactTabs');
+    const deleteImpact = document.getElementById('deleteImpact');
 
     const controls = {
       rayCount: document.getElementById('rayCount'),
@@ -473,6 +502,8 @@
     let center = null;
     let centers = [];
     let centerRatios = [];
+    let impactSettings = [];
+    let selectedImpactIndex = -1;
     let crackTone = 'white';
     let seed = Math.floor(Math.random() * 999999);
     let shards = [];
@@ -535,6 +566,50 @@
       };
     }
 
+    function getSelectedSettings() {
+      return impactSettings[selectedImpactIndex] || getSettings();
+    }
+
+    function cloneSettings(settings) {
+      return { ...settings };
+    }
+
+    function setControlsFromSettings(settings) {
+      controls.rayCount.value = settings.rayCount;
+      controls.breakPower.value = settings.breakPower;
+      controls.crackWidth.value = settings.crackWidth;
+      controls.impactSize.value = settings.impactSize;
+      controls.impactSmoothness.value = settings.impactSmoothness;
+      controls.crackColor.value = settings.crackColor;
+      controls.holeColor.value = settings.holeColor;
+      controls.edgeGlow.value = settings.edgeGlow;
+      controls.aberration.value = settings.aberration;
+      updateValues();
+    }
+
+    function saveSelectedSettings() {
+      if (selectedImpactIndex < 0) return;
+      impactSettings[selectedImpactIndex] = getSettings();
+    }
+
+    function renderImpactTabs() {
+      impactTabs.innerHTML = '';
+      centers.forEach((_, index) => {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.textContent = `破碎点 ${index + 1}`;
+        button.className = index === selectedImpactIndex ? 'active' : '';
+        button.addEventListener('click', () => {
+          selectedImpactIndex = index;
+          setControlsFromSettings(getSelectedSettings());
+          renderImpactTabs();
+          draw();
+        });
+        impactTabs.appendChild(button);
+      });
+      deleteImpact.disabled = centers.length <= 1;
+    }
+
     function updateValues() {
       const s = getSettings();
       values.rayCount.textContent = s.rayCount;
@@ -580,6 +655,9 @@
       centerRatios.push(ratio);
       centers.push(point);
       center = point;
+      impactSettings.push(cloneSettings(getSettings()));
+      selectedImpactIndex = centers.length - 1;
+      renderImpactTabs();
     }
 
     function syncCenterToFit() {
@@ -588,7 +666,8 @@
         x: fit.x + fit.w * ratio.x,
         y: fit.y + fit.h * ratio.y
       }));
-      center = centers[centers.length - 1] || null;
+      selectedImpactIndex = clamp(selectedImpactIndex, 0, centers.length - 1);
+      center = centers[selectedImpactIndex] || centers[centers.length - 1] || null;
     }
 
     function pointOnSegment(a, b, t) {
@@ -645,12 +724,12 @@
       impactCrossCracks = [];
       impactOutlines = [];
       centers.forEach((point, index) => {
-        generateCrackCluster(point, seed + index * 1031, centers);
+        generateCrackCluster(point, seed + index * 1031, centers, impactSettings[index] || getSettings());
       });
     }
 
-    function generateCrackCluster(clusterCenter, clusterSeed, allCenters) {
-      const s = getSettings();
+    function generateCrackCluster(clusterCenter, clusterSeed, allCenters, settings) {
+      const s = settings;
       const rnd = mulberry32(clusterSeed);
       const cx = clusterCenter.x;
       const cy = clusterCenter.y;
@@ -761,7 +840,7 @@
         rayPoints.push(points);
       }
 
-      impactOutlines.push(rayPoints.map(points => points[0]));
+      impactOutlines.push({ points: rayPoints.map(points => points[0]), settings: s });
 
       for (let i = 0; i < rayCount; i++) {
         const next = (i + 1) % rayCount;
@@ -782,6 +861,7 @@
           shards.push({
             poly,
             center: clusterCenter,
+            settings: s,
             tx: Math.cos(dir) * push + (rnd() - .5) * s.breakPower * .45,
             ty: Math.sin(dir) * push + (rnd() - .5) * s.breakPower * .45,
             rot: (rnd() - .5) * .028 * (1 + distNorm),
@@ -795,6 +875,7 @@
         crackPaths.push({
           points: rayPoints[i],
           center: clusterCenter,
+          settings: s,
           kind: rayStrengths[i] > 1.28 ? 'major' : 'radial',
           weight: .48 + rayStrengths[i] * .72
         });
@@ -804,7 +885,7 @@
           const branchAngle = baseAngle + (rnd() > .5 ? 1 : -1) * (.24 + rnd() * .42);
           const branchLen = maxR * (.08 + rnd() * .2);
           const branch = makeCurvedPath(start.x, start.y, branchAngle, branchLen, 3 + Math.floor(rnd() * 3), rnd, .18 + rnd() * .3);
-          crackPaths.push({ points: branch, center: clusterCenter, kind: 'branch', weight: .38 + rnd() * .48 });
+          crackPaths.push({ points: branch, center: clusterCenter, settings: s, kind: 'branch', weight: .38 + rnd() * .48 });
         }
       }
 
@@ -825,7 +906,7 @@
           x: cx + Math.cos(midAngle) * midR * (.96 + (rnd() - .5) * .06),
           y: cy + Math.sin(midAngle) * midR * (.96 + (rnd() - .5) * .06)
         };
-        crackPaths.push({ points: [p1, mid, p2], center: clusterCenter, kind: 'web', weight: .18 + rnd() * .26 });
+        crackPaths.push({ points: [p1, mid, p2], center: clusterCenter, settings: s, kind: 'web', weight: .18 + rnd() * .26 });
       }
 
       const impactCrossCount = Math.floor(rayCount * (.72 + s.impactSize / 28));
@@ -851,6 +932,7 @@
         impactCrossCracks.push({
           points: [p1, mid, p2],
           center: clusterCenter,
+          settings: s,
           kind: 'impact-cross',
           weight: .48 + rnd() * .55
         });
@@ -1089,8 +1171,7 @@
       }
 
       if (!shards.length) generateCracks();
-      const s = getSettings();
-      const colors = lineColors();
+      const s = getSelectedSettings();
 
       ctx.save();
       ctx.fillStyle = s.holeColor;
@@ -1101,7 +1182,7 @@
       }
 
       for (const shard of shards) {
-        clipImageWithTransform(shard.poly, shard, s.aberration);
+        clipImageWithTransform(shard.poly, shard, (shard.settings || s).aberration);
       }
 
       ctx.save();
@@ -1111,13 +1192,23 @@
 
       drawIrregularShardHighlights(shards, s.edgeGlow);
 
-      crackPaths.forEach(path => drawCrackPath(path, s.crackWidth, colors, s.edgeGlow));
-      impactCrossCracks.forEach(path => drawCrackPath(path, s.crackWidth, colors, s.edgeGlow));
+      crackPaths.forEach(path => {
+        const ps = path.settings || s;
+        drawCrackPath(path, ps.crackWidth, { core: ps.crackColor }, ps.edgeGlow);
+      });
+      impactCrossCracks.forEach(path => {
+        const ps = path.settings || s;
+        drawCrackPath(path, ps.crackWidth, { core: ps.crackColor }, ps.edgeGlow);
+      });
 
-      crackPaths.forEach(path => drawCrackRoot(path, s.crackWidth, colors.core));
-      impactOutlines.forEach(points => {
-        drawImpactHole(points, s.holeColor);
-        drawImpactOutline(points, s.crackWidth, colors.core);
+      crackPaths.forEach(path => {
+        const ps = path.settings || s;
+        drawCrackRoot(path, ps.crackWidth, ps.crackColor);
+      });
+      impactOutlines.forEach(outline => {
+        const ps = outline.settings || s;
+        drawImpactHole(outline.points, ps.holeColor);
+        drawImpactOutline(outline.points, ps.crackWidth, ps.crackColor);
       });
       ctx.restore();
 
@@ -1133,7 +1224,11 @@
           sourceImage = img;
           fit = computeFit();
           centerRatios = [{ x: .5, y: .5 }];
+          impactSettings = [cloneSettings(getSettings())];
+          selectedImpactIndex = 0;
           syncCenterToFit();
+          renderImpactTabs();
+          setControlsFromSettings(getSelectedSettings());
           seed = Math.floor(Math.random() * 999999);
           shards = [];
           draw();
@@ -1181,7 +1276,11 @@
         sourceImage = img;
         fit = computeFit();
         centerRatios = [{ x: .54, y: .36 }];
+        impactSettings = [cloneSettings(getSettings())];
+        selectedImpactIndex = 0;
         syncCenterToFit();
+        renderImpactTabs();
+        setControlsFromSettings(getSelectedSettings());
         seed = Math.floor(Math.random() * 999999);
         shards = [];
         generateCracks();
@@ -1219,6 +1318,7 @@
 
     for (const control of Object.values(controls).filter(control => ![controls.crackColor, controls.holeColor].includes(control))) {
       control.addEventListener('input', () => {
+        saveSelectedSettings();
         shards = [];
         generateCracks();
         draw();
@@ -1233,6 +1333,9 @@
         const presetColors = { white: '#ffffff', dark: '#121618', red: '#a41920' };
         controls.crackColor.value = presetColors[crackTone];
         values.crackColor.textContent = controls.crackColor.value;
+        saveSelectedSettings();
+        shards = [];
+        generateCracks();
         draw();
       });
     });
@@ -1241,22 +1344,49 @@
       document.querySelectorAll('[data-crack]').forEach(btn => btn.classList.remove('active'));
       crackTone = 'custom';
       values.crackColor.textContent = controls.crackColor.value;
+      saveSelectedSettings();
+      shards = [];
+      generateCracks();
       draw();
     });
 
     controls.crackColor.addEventListener('change', () => {
       if (!sourceImage) return;
       values.crackColor.textContent = controls.crackColor.value;
+      saveSelectedSettings();
+      shards = [];
+      generateCracks();
       draw();
     });
 
     controls.holeColor.addEventListener('input', () => {
       values.holeColor.textContent = controls.holeColor.value;
+      saveSelectedSettings();
+      shards = [];
+      generateCracks();
       draw();
     });
 
     controls.holeColor.addEventListener('change', () => {
       values.holeColor.textContent = controls.holeColor.value;
+      saveSelectedSettings();
+      shards = [];
+      generateCracks();
+      draw();
+    });
+
+    deleteImpact.addEventListener('click', () => {
+      if (centers.length <= 1 || selectedImpactIndex < 0) return;
+      centerRatios.splice(selectedImpactIndex, 1);
+      impactSettings.splice(selectedImpactIndex, 1);
+      selectedImpactIndex = Math.min(selectedImpactIndex, centerRatios.length - 1);
+      syncCenterToFit();
+      center = centers[selectedImpactIndex] || null;
+      setControlsFromSettings(getSelectedSettings());
+      renderImpactTabs();
+      seed = Math.floor(Math.random() * 999999);
+      shards = [];
+      generateCracks();
       draw();
     });
 
@@ -1284,6 +1414,7 @@
       scheduleResizeCanvas();
     });
 
+    renderImpactTabs();
     updateValues();
     resizeCanvas();
     new ResizeObserver(scheduleResizeCanvas).observe(wrap);
