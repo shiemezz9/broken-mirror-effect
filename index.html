@@ -643,30 +643,46 @@
       const angleBase = rnd() * Math.PI * 2;
       const impactNorm = s.impactSize / 20;
       const impactRadius = 1.2 + Math.min(fit.w, fit.h) * (.18 * impactNorm * impactNorm);
-      const rings = [
-        impactRadius,
-        Math.max(impactRadius * 1.7, maxR * .07),
-        Math.max(impactRadius * 2.5, maxR * .15),
-        maxR * .28,
-        maxR * .47,
-        maxR * .72,
-        maxR * 1.08
-      ].map((v, i) => Math.max(impactRadius * .72, v + (i ? (rnd() - .5) * maxR * .025 : 0)));
+      const distanceLayerCount = Math.floor(rnd() * 3);
+      const innerRings = [];
+      for (let i = 0; i < distanceLayerCount; i++) {
+        const spread = (i + 1) / (distanceLayerCount + 1);
+        const warped = clamp(spread + (rnd() - .5) * .34, .12, .9);
+        innerRings.push(Math.max(impactRadius * 1.8, maxR * (.1 + warped * .78)));
+      }
+      innerRings.sort((a, b) => a - b);
+      const rings = [impactRadius, ...innerRings, maxR * 1.12];
       const rayPoints = [];
 
       for (let i = 0; i < rayCount; i++) {
         const uneven = (rnd() - .5) * .32 + Math.sin(i * 1.7) * .06;
         const angle = angleBase + (Math.PI * 2 * i / rayCount) + uneven;
-        const length = maxR * (.76 + rnd() * .38);
+        const length = maxR * (1.18 + rnd() * .2);
         const basePath = makeCurvedPath(cx, cy, angle, length, rings.length - 1, rnd, .23 + rnd() * .28);
         const points = [];
+        const minGap = Math.max(impactRadius * .6, maxR * .02);
+        let previousRadius = impactRadius * 1.18;
+        const innerRayRadii = rings.slice(1, -1)
+          .map(radius => radius * (.58 + rnd() * .86) + (rnd() - .5) * maxR * .07)
+          .sort((a, b) => a - b)
+          .map((radius, index, list) => {
+            const remaining = list.length - index;
+            const ceiling = maxR * 1.02 - minGap * remaining;
+            const value = clamp(radius, previousRadius + minGap, ceiling);
+            previousRadius = value;
+            return value;
+          });
+        const rayRings = [
+          impactRadius * (.72 + rnd() * .72),
+          ...innerRayRadii,
+          maxR * (1.12 + rnd() * .16)
+        ];
         for (let r = 0; r < rings.length; r++) {
-          const t = rings[r] / maxR;
-          const point = pointOnPath(basePath, Math.min(1, t / 1.08));
+          const t = rayRings[r] / maxR;
+          const point = pointOnPath(basePath, Math.min(1, t / 1.12));
           if (r === 0) {
-            const rough = .72 + rnd() * .72;
-            point.x = cx + Math.cos(angle) * impactRadius * rough;
-            point.y = cy + Math.sin(angle) * impactRadius * rough;
+            point.x = cx + Math.cos(angle) * rayRings[r];
+            point.y = cy + Math.sin(angle) * rayRings[r];
           }
           points.push(point);
         }
@@ -707,8 +723,7 @@
       for (let i = 0; i < rayCount; i++) {
         crackPaths.push({ points: rayPoints[i], kind: i % 4 === 0 ? 'major' : 'radial', weight: .65 + rnd() * .7 });
         if (rnd() > .35) {
-          const startRing = Math.floor(1 + rnd() * (rings.length - 3));
-          const start = rayPoints[i][startRing];
+          const start = pointOnPath(rayPoints[i], .18 + rnd() * .46);
           const baseAngle = Math.atan2(start.y - cy, start.x - cx);
           const branchAngle = baseAngle + (rnd() > .5 ? 1 : -1) * (.24 + rnd() * .42);
           const branchLen = maxR * (.08 + rnd() * .2);
@@ -923,68 +938,38 @@
     function drawIrregularShardHighlights(shards, amount) {
       if (amount <= 0) return;
       const strength = amount / 100;
+      const clusterCount = Math.floor(stableNoise(seed * .013 + amount * .17) * 3);
       ctx.save();
       ctx.lineCap = 'round';
       ctx.lineJoin = 'round';
-      shards.forEach((shard, shardIndex) => {
-        const poly = shard.poly;
-        for (let edgeIndex = 0; edgeIndex < poly.length; edgeIndex++) {
-          const a = poly[edgeIndex];
-          const b = poly[(edgeIndex + 1) % poly.length];
-          const len = Math.hypot(b.x - a.x, b.y - a.y);
-          if (len < 18) continue;
-          const key = shardIndex * 17.29 + edgeIndex * 9.13 + a.x * .006 + b.y * .004;
-          const mid = pointOnSegment(a, b, .5);
-          const ex = (b.x - a.x) / len;
-          const ey = (b.y - a.y) / len;
-          const rx = center ? mid.x - center.x : 1;
-          const ry = center ? mid.y - center.y : 0;
-          const rLen = Math.hypot(rx, ry) || 1;
-          const radialAlignment = Math.abs(ex * rx / rLen + ey * ry / rLen);
-          const isRingLike = radialAlignment < .38;
-          const chance = isRingLike ? (.018 + strength * .09) : (.11 + strength * .3);
-          if (stableNoise(key) > chance) continue;
+      for (let cluster = 0; cluster < clusterCount; cluster++) {
+        const key = seed * .019 + cluster * 43.17 + amount * .11;
+        const baseAngle = stableNoise(key) * Math.PI * 2;
+        const spokeCount = 3 + Math.floor(stableNoise(key + 3.1) * 5);
+        const innerR = Math.max(8, Math.min(fit.w, fit.h) * (.08 + stableNoise(key + 6.2) * .18));
+        const cx = center.x + (stableNoise(key + 9.3) - .5) * fit.w * .4;
+        const cy = center.y + (stableNoise(key + 12.4) - .5) * fit.h * .4;
 
-          const startTrim = .1 + stableNoise(key + 2.1) * .55;
-          const visibleLen = (isRingLike ? .1 : .16) + stableNoise(key + 4.7) * (isRingLike ? .22 : .34);
-          const endT = Math.min(.96, startTrim + visibleLen);
-          if (endT <= startTrim + .06) continue;
-
-          const p0 = pointOnSegment(a, b, startTrim);
-          const p1 = pointOnSegment(a, b, endT);
-          const dx = p1.x - p0.x;
-          const dy = p1.y - p0.y;
-          const edgeLen = Math.hypot(dx, dy) || 1;
-          const nx = -dy / edgeLen;
-          const ny = dx / edgeLen;
-          const jitter0 = (stableNoise(key + 8.3) - .5) * 7.2;
-          const jitter1 = (stableNoise(key + 11.9) - .5) * 7.2;
-
+        for (let i = 0; i < spokeCount; i++) {
+          const angle = baseAngle + i * Math.PI * 2 / spokeCount + (stableNoise(key + i * 2.7) - .5) * .7;
+          const startR = innerR * (.35 + stableNoise(key + i * 5.1) * .75);
+          const endR = innerR * (1.15 + stableNoise(key + i * 7.3) * 2.7);
+          const bend = (stableNoise(key + i * 11.6) - .5) * innerR * .45;
+          const p0 = {
+            x: cx + Math.cos(angle) * startR,
+            y: cy + Math.sin(angle) * startR
+          };
+          const p1 = {
+            x: cx + Math.cos(angle) * endR + Math.cos(angle + Math.PI / 2) * bend,
+            y: cy + Math.sin(angle) * endR + Math.sin(angle + Math.PI / 2) * bend
+          };
           ctx.beginPath();
-          ctx.moveTo(p0.x + shard.tx * .12 + nx * jitter0, p0.y + shard.ty * .12 + ny * jitter0);
-          ctx.lineTo(p1.x + shard.tx * .12 + nx * jitter1, p1.y + shard.ty * .12 + ny * jitter1);
-          ctx.strokeStyle = `rgba(255,255,255,${(.04 + stableNoise(key + 15.2) * (isRingLike ? .12 : .28)) * strength})`;
-          ctx.lineWidth = .28 + stableNoise(key + 19.6) * (isRingLike ? .55 : 1.05);
+          ctx.moveTo(p0.x, p0.y);
+          ctx.lineTo(p1.x, p1.y);
+          ctx.strokeStyle = `rgba(255,255,255,${(.045 + stableNoise(key + i * 13.9) * .2) * strength})`;
+          ctx.lineWidth = .35 + stableNoise(key + i * 17.4) * .9;
           ctx.stroke();
         }
-      });
-      const sparkCount = Math.floor(shards.length * strength * .16);
-      for (let i = 0; i < sparkCount; i++) {
-        const shard = shards[Math.floor(stableNoise(i * 21.7 + seed * .003) * shards.length)];
-        if (!shard) continue;
-        const c = centroid(shard.poly);
-        const key = i * 31.31 + c.x * .01 + c.y * .014;
-        const angle = stableNoise(key) * Math.PI * 2;
-        const length = 10 + stableNoise(key + 2.4) * 44;
-        const offset = (stableNoise(key + 5.7) - .5) * 28;
-        const x = c.x + shard.tx * .12 + Math.cos(angle + Math.PI / 2) * offset;
-        const y = c.y + shard.ty * .12 + Math.sin(angle + Math.PI / 2) * offset;
-        ctx.beginPath();
-        ctx.moveTo(x - Math.cos(angle) * length * .5, y - Math.sin(angle) * length * .5);
-        ctx.lineTo(x + Math.cos(angle) * length * .5, y + Math.sin(angle) * length * .5);
-        ctx.strokeStyle = `rgba(255,255,255,${(.035 + stableNoise(key + 8.6) * .15) * strength})`;
-        ctx.lineWidth = .3 + stableNoise(key + 11.2) * .7;
-        ctx.stroke();
       }
       ctx.restore();
     }
