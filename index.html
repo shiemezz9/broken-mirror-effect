@@ -212,7 +212,7 @@
 
     .actions {
       display: grid;
-      grid-template-columns: 1fr 1fr;
+      grid-template-columns: repeat(3, 1fr);
       gap: 10px;
       border-top: 1px solid var(--line);
       padding-top: 16px;
@@ -442,6 +442,7 @@
       <div class="actions">
         <button class="btn" id="randomize" type="button">重生成</button>
         <button class="btn primary" id="download" type="button">导出 PNG</button>
+        <button class="btn" id="downloadPsd" type="button">导出 PSD</button>
       </div>
       <div class="copyright">
         <span>制作者 @shiemezz</span>
@@ -1159,6 +1160,52 @@
       ctx.restore();
     }
 
+    function makeFlatPsdFromCanvas() {
+      const width = canvas.width;
+      const height = canvas.height;
+      const pixels = ctx.getImageData(0, 0, width, height).data;
+      const headerSize = 26;
+      const sectionSizes = 4 + 4 + 4;
+      const imageDataSize = 2 + width * height * 3;
+      const buffer = new ArrayBuffer(headerSize + sectionSizes + imageDataSize);
+      const view = new DataView(buffer);
+      let offset = 0;
+      const writeAscii = text => {
+        for (let i = 0; i < text.length; i++) view.setUint8(offset++, text.charCodeAt(i));
+      };
+      const writeU16 = value => {
+        view.setUint16(offset, value, false);
+        offset += 2;
+      };
+      const writeU32 = value => {
+        view.setUint32(offset, value, false);
+        offset += 4;
+      };
+
+      writeAscii('8BPS');
+      writeU16(1);
+      for (let i = 0; i < 6; i++) view.setUint8(offset++, 0);
+      writeU16(3);
+      writeU32(height);
+      writeU32(width);
+      writeU16(8);
+      writeU16(3);
+      writeU32(0);
+      writeU32(0);
+      writeU32(0);
+      writeU16(0);
+
+      const planeSize = width * height;
+      const bytes = new Uint8Array(buffer);
+      for (let channel = 0; channel < 3; channel++) {
+        const planeOffset = offset + channel * planeSize;
+        for (let i = 0, p = 0; i < planeSize; i++, p += 4) {
+          bytes[planeOffset + i] = pixels[p + channel];
+        }
+      }
+      return new Blob([buffer], { type: 'image/vnd.adobe.photoshop' });
+    }
+
     function drawIrregularShardHighlights(shards, amount) {
       if (amount <= 0) return;
       const solidHighlightColor = getSelectedSettings().crackColor || '#ffffff';
@@ -1492,6 +1539,15 @@
       link.download = 'broken-mirror-effect.png';
       link.href = canvas.toDataURL('image/png');
       link.click();
+    });
+
+    document.getElementById('downloadPsd').addEventListener('click', () => {
+      if (!sourceImage) return;
+      const link = document.createElement('a');
+      link.download = 'broken-mirror-effect.psd';
+      link.href = URL.createObjectURL(makeFlatPsdFromCanvas());
+      link.click();
+      setTimeout(() => URL.revokeObjectURL(link.href), 1000);
     });
 
     window.addEventListener('resize', () => {
