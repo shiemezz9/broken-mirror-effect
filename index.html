@@ -1400,6 +1400,11 @@
       ];
     }
 
+    function makeCompositePngCanvas() {
+      const composite = copyCurrentPreviewToSourceCanvas();
+      return composite;
+    }
+
     function canvasToPngBytes(canvas) {
       const dataUrl = canvas.toDataURL('image/png');
       const base64 = dataUrl.slice(dataUrl.indexOf(',') + 1);
@@ -1814,9 +1819,10 @@
 
     document.getElementById('download').addEventListener('click', () => {
       if (!sourceImage) return;
+      draw();
       const link = document.createElement('a');
       link.download = 'broken-mirror-effect.png';
-      link.href = canvas.toDataURL('image/png');
+      link.href = makeCompositePngCanvas().toDataURL('image/png');
       link.click();
     });
 
