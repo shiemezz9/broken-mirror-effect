@@ -642,6 +642,7 @@
     let lastCanvasWidth = 0;
     let lastCanvasHeight = 0;
     let resizeFrame = 0;
+    let renderPixelScale = 1;
 
     function mulberry32(a) {
       return function() {
@@ -1038,14 +1039,15 @@
           const dx = mid.x - cx;
           const dy = mid.y - cy;
           const distNorm = clamp(Math.hypot(dx, dy) / maxR, 0, 1);
-          const push = s.breakPower * (.18 + distNorm) * (.45 + rnd());
+          const scaledBreakPower = s.breakPower * renderPixelScale;
+          const push = scaledBreakPower * (.18 + distNorm) * (.45 + rnd());
           const dir = Math.atan2(dy, dx);
           shards.push({
             poly,
             center: clusterCenter,
             settings: s,
-            tx: Math.cos(dir) * push + (rnd() - .5) * s.breakPower * .45,
-            ty: Math.sin(dir) * push + (rnd() - .5) * s.breakPower * .45,
+            tx: Math.cos(dir) * push + (rnd() - .5) * scaledBreakPower * .45,
+            ty: Math.sin(dir) * push + (rnd() - .5) * scaledBreakPower * .45,
             rot: (rnd() - .5) * .028 * (1 + distNorm),
             shine: rnd(),
             dark: rnd() * .18
@@ -1138,6 +1140,7 @@
 
     function clipImageWithTransform(poly, shard, aberration) {
       const c = centroid(poly);
+      const scaledAberration = aberration * renderPixelScale;
       ctx.save();
       ctx.beginPath();
       poly.forEach((p, i) => i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y));
@@ -1147,13 +1150,13 @@
       ctx.rotate(shard.rot);
       ctx.translate(-c.x, -c.y);
 
-      if (aberration > 0) {
+      if (scaledAberration > 0) {
         ctx.globalCompositeOperation = 'source-over';
         ctx.globalAlpha = .25;
-        ctx.drawImage(sourceImage, fit.x + aberration * .5, fit.y, fit.w, fit.h);
+        ctx.drawImage(sourceImage, fit.x + scaledAberration * .5, fit.y, fit.w, fit.h);
         ctx.globalCompositeOperation = 'screen';
         ctx.globalAlpha = .18;
-        ctx.drawImage(sourceImage, fit.x - aberration, fit.y + aberration * .35, fit.w, fit.h);
+        ctx.drawImage(sourceImage, fit.x - scaledAberration, fit.y + scaledAberration * .35, fit.w, fit.h);
         ctx.globalCompositeOperation = 'source-over';
         ctx.globalAlpha = 1;
       }
@@ -1190,17 +1193,20 @@
     }
 
     function drawSegment(a, b, offsetX, offsetY, strokeStyle, lineWidth) {
+      const scaledLineWidth = lineWidth * renderPixelScale;
+      const scaledOffsetX = offsetX * renderPixelScale;
+      const scaledOffsetY = offsetY * renderPixelScale;
       const dx = b.x - a.x;
       const dy = b.y - a.y;
       const len = Math.hypot(dx, dy) || 1;
-      const overlap = Math.min(4.5, Math.max(.9, lineWidth * .78));
+      const overlap = Math.min(4.5 * renderPixelScale, Math.max(.9 * renderPixelScale, scaledLineWidth * .78));
       const ex = dx / len * overlap;
       const ey = dy / len * overlap;
       ctx.beginPath();
-      ctx.moveTo(a.x - ex + offsetX, a.y - ey + offsetY);
-      ctx.lineTo(b.x + ex + offsetX, b.y + ey + offsetY);
+      ctx.moveTo(a.x - ex + scaledOffsetX, a.y - ey + scaledOffsetY);
+      ctx.lineTo(b.x + ex + scaledOffsetX, b.y + ey + scaledOffsetY);
       ctx.strokeStyle = strokeStyle;
-      ctx.lineWidth = lineWidth;
+      ctx.lineWidth = scaledLineWidth;
       ctx.lineCap = 'round';
       ctx.stroke();
     }
@@ -1265,7 +1271,7 @@
       ctx.moveTo(a.x, a.y);
       ctx.lineTo(mid.x, mid.y);
       ctx.strokeStyle = color;
-      ctx.lineWidth = Math.max(.42, width * .58 * crack.weight);
+      ctx.lineWidth = Math.max(.42 * renderPixelScale, width * .58 * crack.weight * renderPixelScale);
       ctx.stroke();
       ctx.restore();
     }
@@ -1279,7 +1285,7 @@
       points.forEach((p, i) => i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y));
       ctx.closePath();
       ctx.strokeStyle = color;
-      ctx.lineWidth = Math.max(.24, width * .12);
+      ctx.lineWidth = Math.max(.24 * renderPixelScale, width * .12 * renderPixelScale);
       ctx.stroke();
       ctx.restore();
     }
@@ -1323,8 +1329,8 @@
       const s = getSelectedSettings();
       const crackLayerOffsets = [
         { x: 0, y: 0 },
-        { x: .16, y: .08 },
-        { x: -.12, y: .14 }
+        { x: .16 * renderPixelScale, y: .08 * renderPixelScale },
+        { x: -.12 * renderPixelScale, y: .14 * renderPixelScale }
       ];
       crackLayerOffsets.forEach(offset => {
         ctx.save();
@@ -1359,29 +1365,34 @@
       const oldCrackPaths = crackPaths;
       const oldImpactOutlines = impactOutlines;
       const oldImpactCrossCracks = impactCrossCracks;
+      const oldRenderPixelScale = renderPixelScale;
       const layer = makeSourceCanvas();
 
-      ctx = layer.getContext('2d');
-      fit = {
-        x: 0,
-        y: 0,
-        w: sourceImage.width,
-        h: sourceImage.height,
-        scale: 1
-      };
-      syncCenterToFit();
-      shards = [];
-      generateCracks();
-      renderLayer();
-
-      ctx = oldCtx;
-      fit = oldFit;
-      centers = oldCenters;
-      center = oldCenter;
-      shards = oldShards;
-      crackPaths = oldCrackPaths;
-      impactOutlines = oldImpactOutlines;
-      impactCrossCracks = oldImpactCrossCracks;
+      try {
+        ctx = layer.getContext('2d');
+        renderPixelScale = oldFit && oldFit.w ? sourceImage.width / oldFit.w : 1;
+        fit = {
+          x: 0,
+          y: 0,
+          w: sourceImage.width,
+          h: sourceImage.height,
+          scale: 1
+        };
+        syncCenterToFit();
+        shards = [];
+        generateCracks();
+        renderLayer();
+      } finally {
+        ctx = oldCtx;
+        fit = oldFit;
+        centers = oldCenters;
+        center = oldCenter;
+        shards = oldShards;
+        crackPaths = oldCrackPaths;
+        impactOutlines = oldImpactOutlines;
+        impactCrossCracks = oldImpactCrossCracks;
+        renderPixelScale = oldRenderPixelScale;
+      }
       return layer;
     }
 
@@ -1542,7 +1553,7 @@
           ctx.moveTo(p0.x, p0.y);
           ctx.lineTo(p1.x, p1.y);
           ctx.strokeStyle = solidHighlightColor;
-          ctx.lineWidth = .35 + stableNoise(key + i * 17.4) * .9;
+          ctx.lineWidth = (.35 + stableNoise(key + i * 17.4) * .9) * renderPixelScale;
           ctx.stroke();
         }
       }
@@ -1603,8 +1614,8 @@
 
       const crackLayerOffsets = [
         { x: 0, y: 0 },
-        { x: .16, y: .08 },
-        { x: -.12, y: .14 }
+        { x: .16 * renderPixelScale, y: .08 * renderPixelScale },
+        { x: -.12 * renderPixelScale, y: .14 * renderPixelScale }
       ];
       crackLayerOffsets.forEach(offset => {
         ctx.save();
