@@ -729,6 +729,19 @@
       impactSettings[selectedImpactIndex] = getSettings();
     }
 
+    function updateImpactModeNote() {
+      if (!modeNote) return;
+      if (!sourceImage) {
+        modeNote.textContent = '上传或拖入图片后开始编辑。';
+      } else if (addingImpact || !centers.length) {
+        modeNote.textContent = '放置模式：点击右侧画面新增破碎点。';
+      } else if (selectedImpactIndex === -1) {
+        modeNote.textContent = '全局模式：当前参数会应用到所有破碎点。';
+      } else {
+        modeNote.textContent = `编辑破碎点 ${selectedImpactIndex + 1}：点击画面可移动它。`;
+      }
+    }
+
     function renderImpactTabs() {
       impactTabs.innerHTML = '';
       const allButton = document.createElement('button');
@@ -760,16 +773,7 @@
       });
       addImpact.textContent = addingImpact ? '点击画面放置' : '新增破碎点';
       deleteImpact.disabled = centers.length <= 1 || selectedImpactIndex === -1 || addingImpact;
-      if (!modeNote) return;
-      if (!sourceImage) {
-        modeNote.textContent = '上传或拖入图片后开始编辑。';
-      } else if (addingImpact || !centers.length) {
-        modeNote.textContent = '放置模式：点击右侧画面新增破碎点。';
-      } else if (selectedImpactIndex === -1) {
-        modeNote.textContent = '全局模式：当前参数会应用到所有破碎点。';
-      } else {
-        modeNote.textContent = `编辑破碎点 ${selectedImpactIndex + 1}：点击画面可移动它。`;
-      }
+      updateImpactModeNote();
     }
 
     function updateValues() {
@@ -841,7 +845,9 @@
         x: fit.x + fit.w * ratio.x,
         y: fit.y + fit.h * ratio.y
       }));
-      selectedImpactIndex = clamp(selectedImpactIndex, 0, centers.length - 1);
+      if (selectedImpactIndex !== -1) {
+        selectedImpactIndex = clamp(selectedImpactIndex, 0, centers.length - 1);
+      }
       center = centers[selectedImpactIndex] || centers[centers.length - 1] || null;
     }
 
@@ -1521,7 +1527,7 @@
       if (!sourceImage) {
         dropNote.classList.remove('hidden');
         sizeLabel.textContent = '-';
-        renderImpactTabs();
+        updateImpactModeNote();
         return;
       }
 
@@ -1533,7 +1539,7 @@
       if (!centers.length) {
         drawImageFitted();
         statusEl.textContent = '点击图片上的破碎中心';
-        renderImpactTabs();
+        updateImpactModeNote();
         return;
       }
 
@@ -1595,7 +1601,7 @@
       statusEl.textContent = selectedImpactIndex === -1
         ? `全局调整：${centers.length} 个破碎点`
         : `正在编辑破碎点 ${selectedImpactIndex + 1} / ${centers.length}`;
-      renderImpactTabs();
+      updateImpactModeNote();
     }
 
     function loadFile(file) {
