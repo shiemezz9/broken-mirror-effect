@@ -1260,11 +1260,11 @@
       }));
       draw();
       return makePsdFromLayers(width, height, [
-        { name: 'Background', unicodeName: '背景图', canvas: background, opacity: 255 },
-        { name: 'Base Image', unicodeName: '底图', canvas: baseImage, opacity: 255 },
-        { name: 'Impact Holes', unicodeName: '破碎点', canvas: impactHoles, opacity: 255 },
-        { name: 'Cracks', unicodeName: '裂纹', canvas: cracks, opacity: 255 },
-        { name: 'Highlights', unicodeName: '高光层', canvas: highlights, opacity: 255 }
+        { name: 'Background', canvas: background, opacity: 255 },
+        { name: 'Base Image', canvas: baseImage, opacity: 255 },
+        { name: 'Impact Holes', canvas: impactHoles, opacity: 255 },
+        { name: 'Cracks', canvas: cracks, opacity: 255 },
+        { name: 'Highlights', canvas: highlights, opacity: 255 }
       ]);
     }
 
@@ -1283,12 +1283,7 @@
         const nameLength = Math.min(255, name.length);
         return 1 + nameLength + ((4 - ((1 + nameLength) % 4)) % 4);
       };
-      const unicodeNameBlockSize = layer => {
-        if (!layer.unicodeName) return 0;
-        const dataLength = 4 + layer.unicodeName.length * 2;
-        return 12 + dataLength + (dataLength % 2);
-      };
-      const layerExtraSize = layer => 8 + pascalNameSize(layer.name) + unicodeNameBlockSize(layer);
+      const layerExtraSize = layer => 8 + pascalNameSize(layer.name);
       const layerRecordSize = layer => {
         return 58 + layerExtraSize(layer);
       };
@@ -1298,7 +1293,7 @@
         + psdLayerPixels.length * 4 * channelImageSize;
       const layerInfoSize = layerInfoSizeRaw + (layerInfoSizeRaw % 2);
       const layerMaskSectionSize = 4 + layerInfoSize + 4;
-      const imageDataSize = 2 + planeSize * 3;
+      const imageDataSize = 2 + planeSize * 4;
       const buffer = new ArrayBuffer(26 + 4 + 4 + layerMaskSectionSize + imageDataSize);
       const view = new DataView(buffer);
       const bytes = new Uint8Array(buffer);
@@ -1325,16 +1320,6 @@
         for (let i = 0; i < cleanName.length; i++) writeU8(cleanName.charCodeAt(i));
         while (offset % 4) writeU8(0);
       };
-      const writeUnicodeLayerName = name => {
-        if (!name) return;
-        const dataLength = 4 + name.length * 2;
-        writeAscii('8BIM');
-        writeAscii('luni');
-        writeU32(dataLength);
-        writeU32(name.length);
-        for (let i = 0; i < name.length; i++) writeU16(name.charCodeAt(i));
-        if (dataLength % 2) writeU8(0);
-      };
       const writeChannelPlane = (pixels, channelIndex) => {
         writeU16(0);
         for (let i = 0, p = 0; i < planeSize; i++, p += 4) {
@@ -1345,7 +1330,7 @@
       writeAscii('8BPS');
       writeU16(1);
       for (let i = 0; i < 6; i++) writeU8(0);
-      writeU16(3);
+      writeU16(4);
       writeU32(height);
       writeU32(width);
       writeU16(8);
@@ -1362,7 +1347,7 @@
         writeU32(height);
         writeU32(width);
         writeU16(4);
-        [-1, 0, 1, 2].forEach(channelId => {
+        [0, 1, 2, -1].forEach(channelId => {
           writeI16(channelId);
           writeU32(channelImageSize);
         });
@@ -1376,19 +1361,18 @@
         writeU32(0);
         writeU32(0);
         writeLayerName(layer.name);
-        writeUnicodeLayerName(layer.unicodeName);
       });
       psdLayerPixels.forEach(layer => {
-        writeChannelPlane(layer.pixels, 3);
         writeChannelPlane(layer.pixels, 0);
         writeChannelPlane(layer.pixels, 1);
         writeChannelPlane(layer.pixels, 2);
+        writeChannelPlane(layer.pixels, 3);
       });
       if (layerInfoSizeRaw % 2) writeU8(0);
       writeU32(0);
 
       writeU16(0);
-      for (let channel = 0; channel < 3; channel++) {
+      for (let channel = 0; channel < 4; channel++) {
         for (let i = 0, p = 0; i < planeSize; i++, p += 4) {
           bytes[offset++] = compositePixels[p + channel];
         }
