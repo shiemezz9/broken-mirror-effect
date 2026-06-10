@@ -588,7 +588,7 @@
 
   <script>
     const canvas = document.getElementById('canvas');
-    const ctx = canvas.getContext('2d');
+    let ctx = canvas.getContext('2d');
     const wrap = document.getElementById('canvasWrap');
     const dropNote = document.getElementById('dropNote');
     const statusEl = document.getElementById('status');
@@ -1302,33 +1302,6 @@
       return layer;
     }
 
-    function copyCurrentPreviewToSourceCanvas() {
-      const layer = makeSourceCanvas();
-      const layerCtx = layer.getContext('2d');
-      const dpr = canvas.width / Math.max(1, lastCanvasWidth);
-      layerCtx.drawImage(
-        canvas,
-        fit.x * dpr,
-        fit.y * dpr,
-        fit.w * dpr,
-        fit.h * dpr,
-        0,
-        0,
-        sourceImage.width,
-        sourceImage.height
-      );
-      return layer;
-    }
-
-    function capturePreviewLayer(renderLayer) {
-      ctx.save();
-      ctx.setTransform(1, 0, 0, 1, 0, 0);
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-      ctx.restore();
-      renderLayer();
-      return copyCurrentPreviewToSourceCanvas();
-    }
-
     function drawClippedEffectLayer(renderLayer) {
       ctx.save();
       ctx.beginPath();
@@ -1377,21 +1350,76 @@
       });
     }
 
+    function withSourceRender(renderLayer) {
+      const oldCtx = ctx;
+      const oldFit = fit;
+      const oldCenters = centers;
+      const oldCenter = center;
+      const oldShards = shards;
+      const oldCrackPaths = crackPaths;
+      const oldImpactOutlines = impactOutlines;
+      const oldImpactCrossCracks = impactCrossCracks;
+      const layer = makeSourceCanvas();
+
+      ctx = layer.getContext('2d');
+      fit = {
+        x: 0,
+        y: 0,
+        w: sourceImage.width,
+        h: sourceImage.height,
+        scale: 1
+      };
+      syncCenterToFit();
+      shards = [];
+      generateCracks();
+      renderLayer();
+
+      ctx = oldCtx;
+      fit = oldFit;
+      centers = oldCenters;
+      center = oldCenter;
+      shards = oldShards;
+      crackPaths = oldCrackPaths;
+      impactOutlines = oldImpactOutlines;
+      impactCrossCracks = oldImpactCrossCracks;
+      return layer;
+    }
+
+    function drawCompositeScene() {
+      if (!sourceImage) return;
+      if (!centers.length) {
+        drawImageFitted();
+        return;
+      }
+      const s = getSelectedSettings();
+      ctx.save();
+      ctx.fillStyle = s.holeColor;
+      ctx.fillRect(fit.x, fit.y, fit.w, fit.h);
+      ctx.restore();
+      if (centers.length > 1) {
+        drawImageFitted();
+      }
+      for (const shard of shards) {
+        clipImageWithTransform(shard.poly, shard, (shard.settings || s).aberration);
+      }
+      drawClippedEffectLayer(() => {
+        drawIrregularShardHighlights(shards, s.edgeGlow);
+        drawAllImpactHoles();
+        drawAllCrackStrokes();
+      });
+    }
+
     function makeLayerPngCanvases() {
-      if (!shards.length) generateCracks();
-      const width = sourceImage.width;
-      const height = sourceImage.height;
-      const baseImage = capturePreviewLayer(() => {
+      const baseImage = withSourceRender(() => {
         for (const shard of shards) {
           clipImageWithTransform(shard.poly, shard, (shard.settings || getSelectedSettings()).aberration);
         }
       });
-      const impactHoles = capturePreviewLayer(() => drawClippedEffectLayer(drawAllImpactHoles));
-      const cracks = capturePreviewLayer(() => drawClippedEffectLayer(drawAllCrackStrokes));
-      const highlights = capturePreviewLayer(() => drawClippedEffectLayer(() => {
+      const impactHoles = withSourceRender(() => drawClippedEffectLayer(drawAllImpactHoles));
+      const cracks = withSourceRender(() => drawClippedEffectLayer(drawAllCrackStrokes));
+      const highlights = withSourceRender(() => drawClippedEffectLayer(() => {
         drawIrregularShardHighlights(shards, getSelectedSettings().edgeGlow);
       }));
-      draw();
       return [
         { filename: '01-displaced-base.png', canvas: baseImage },
         { filename: '02-impact-holes.png', canvas: impactHoles },
@@ -1401,8 +1429,7 @@
     }
 
     function makeCompositePngCanvas() {
-      const composite = copyCurrentPreviewToSourceCanvas();
-      return composite;
+      return withSourceRender(drawCompositeScene);
     }
 
     function canvasToPngBytes(canvas) {
