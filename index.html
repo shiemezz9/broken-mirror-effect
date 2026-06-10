@@ -1293,7 +1293,7 @@
         + psdLayerPixels.length * 4 * channelImageSize;
       const layerInfoSize = layerInfoSizeRaw + (layerInfoSizeRaw % 2);
       const layerMaskSectionSize = 4 + layerInfoSize + 4;
-      const imageDataSize = 2 + planeSize * 4;
+      const imageDataSize = 2 + planeSize * 3;
       const buffer = new ArrayBuffer(26 + 4 + 4 + layerMaskSectionSize + imageDataSize);
       const view = new DataView(buffer);
       const bytes = new Uint8Array(buffer);
@@ -1330,7 +1330,7 @@
       writeAscii('8BPS');
       writeU16(1);
       for (let i = 0; i < 6; i++) writeU8(0);
-      writeU16(4);
+      writeU16(3);
       writeU32(height);
       writeU32(width);
       writeU16(8);
@@ -1355,7 +1355,7 @@
         writeAscii('norm');
         writeU8(layer.opacity);
         writeU8(0);
-        writeU8(8);
+        writeU8(0);
         writeU8(0);
         writeU32(layerExtraSize(layer));
         writeU32(0);
@@ -1372,10 +1372,13 @@
       writeU32(0);
 
       writeU16(0);
-      for (let channel = 0; channel < 4; channel++) {
+      for (let channel = 0; channel < 3; channel++) {
         for (let i = 0, p = 0; i < planeSize; i++, p += 4) {
           bytes[offset++] = compositePixels[p + channel];
         }
+      }
+      if (offset !== buffer.byteLength) {
+        console.warn('PSD byte size mismatch', offset, buffer.byteLength);
       }
       return new Blob([buffer], { type: 'image/vnd.adobe.photoshop' });
     }
@@ -1721,7 +1724,7 @@
       link.download = 'broken-mirror-effect.psd';
       link.href = URL.createObjectURL(makeLayeredPsd());
       link.click();
-      setTimeout(() => URL.revokeObjectURL(link.href), 1000);
+      setTimeout(() => URL.revokeObjectURL(link.href), 120000);
     });
 
     window.addEventListener('resize', () => {
