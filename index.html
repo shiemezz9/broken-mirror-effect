@@ -7,10 +7,11 @@
   <style>
     :root {
       color-scheme: dark;
-      --bg: #101114;
-      --panel: #191b20;
-      --panel-2: #20242b;
-      --line: #343945;
+      --bg: #0f1115;
+      --panel: #171a20;
+      --panel-2: #22262e;
+      --panel-3: #11141a;
+      --line: #303642;
       --text: #f4f5f7;
       --muted: #a9afba;
       --accent: #18c7b9;
@@ -29,9 +30,10 @@
       height: 100vh;
       overflow: hidden;
       background:
-        linear-gradient(180deg, rgba(255,255,255,.035), transparent 220px),
-        radial-gradient(circle at 20% 0%, rgba(24,199,185,.14), transparent 32rem),
-        #101114;
+        linear-gradient(180deg, rgba(255,255,255,.04), transparent 240px),
+        linear-gradient(135deg, rgba(240,83,101,.12), transparent 36%),
+        linear-gradient(315deg, rgba(24,199,185,.16), transparent 38%),
+        var(--bg);
       color: var(--text);
     }
 
@@ -44,17 +46,17 @@
     .app {
       height: 100vh;
       display: grid;
-      grid-template-columns: minmax(280px, 340px) minmax(0, 1fr);
+      grid-template-columns: minmax(320px, 380px) minmax(0, 1fr);
       overflow: hidden;
     }
 
     .sidebar {
       border-right: 1px solid var(--line);
-      background: rgba(17, 18, 22, .92);
-      padding: 18px;
+      background: rgba(15, 17, 21, .96);
+      padding: 18px 18px 14px;
       display: flex;
       flex-direction: column;
-      gap: 16px;
+      gap: 14px;
       min-height: 0;
       overflow: auto;
     }
@@ -64,6 +66,7 @@
       align-items: center;
       gap: 12px;
       min-height: 42px;
+      padding-bottom: 2px;
     }
 
     .mark {
@@ -80,9 +83,18 @@
 
     h1 {
       margin: 0;
-      font-size: 17px;
+      font-size: 18px;
       line-height: 1.25;
       font-weight: 760;
+    }
+
+    .eyebrow {
+      margin: 0 0 2px;
+      color: var(--accent);
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: .08em;
+      text-transform: uppercase;
     }
 
     .hint {
@@ -93,9 +105,22 @@
     }
 
     .section {
-      border-top: 1px solid var(--line);
-      padding-top: 16px;
+      border: 1px solid rgba(255,255,255,.075);
+      border-radius: var(--radius);
+      padding: 14px;
+      background: rgba(255,255,255,.025);
       display: grid;
+      gap: 12px;
+    }
+
+    .section.compact {
+      gap: 10px;
+    }
+
+    .section-header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
       gap: 12px;
     }
 
@@ -106,6 +131,14 @@
       text-transform: uppercase;
       letter-spacing: .08em;
       font-weight: 740;
+    }
+
+    .section-desc,
+    .mode-note {
+      margin: 0;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.5;
     }
 
     .file {
@@ -122,9 +155,15 @@
       background: #16181d;
     }
 
+    .button-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+
     .control {
       display: grid;
-      gap: 8px;
+      gap: 7px;
     }
 
     .control label {
@@ -137,7 +176,7 @@
 
     .color-input {
       width: 100%;
-      height: 42px;
+      height: 38px;
       padding: 4px;
       border: 1px solid var(--line);
       border-radius: var(--radius);
@@ -212,10 +251,19 @@
 
     .actions {
       display: grid;
-      grid-template-columns: repeat(3, 1fr);
+      grid-template-columns: 1fr;
       gap: 10px;
-      border-top: 1px solid var(--line);
-      padding-top: 16px;
+      position: sticky;
+      bottom: -14px;
+      padding: 12px 0 14px;
+      background: linear-gradient(180deg, rgba(15,17,21,0), rgba(15,17,21,.98) 18px);
+      z-index: 2;
+    }
+
+    .export-actions {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
     }
 
     .copyright {
@@ -237,12 +285,33 @@
       color: var(--text);
       cursor: pointer;
       font-weight: 700;
+      transition: border-color .15s ease, background .15s ease, transform .15s ease;
     }
 
     .btn.primary {
       border-color: rgba(24,199,185,.7);
       background: var(--accent);
       color: #061211;
+    }
+
+    .btn.subtle {
+      background: var(--panel-3);
+      color: #d7dbe2;
+    }
+
+    .btn.danger {
+      border-color: rgba(240,83,101,.45);
+      color: #ffd9df;
+    }
+
+    .btn:hover:not(:disabled) {
+      border-color: rgba(255,255,255,.28);
+      transform: translateY(-1px);
+    }
+
+    .btn:disabled {
+      opacity: .42;
+      cursor: not-allowed;
     }
 
     .btn:focus-visible,
@@ -255,7 +324,7 @@
     .stage {
       min-width: 0;
       min-height: 0;
-      padding: 18px;
+      padding: 16px;
       display: grid;
       grid-template-rows: auto minmax(0, 1fr);
       gap: 12px;
@@ -263,13 +332,21 @@
     }
 
     .toolbar {
-      min-height: 42px;
+      min-height: 44px;
       display: flex;
       align-items: center;
       justify-content: space-between;
       gap: 12px;
       color: var(--muted);
       font-size: 13px;
+      padding: 0 2px;
+    }
+
+    .toolbar strong {
+      display: block;
+      color: var(--text);
+      font-size: 14px;
+      margin-bottom: 2px;
     }
 
     .status {
@@ -278,12 +355,17 @@
       white-space: nowrap;
     }
 
+    .canvas-size {
+      color: #d8dde6;
+      font-variant-numeric: tabular-nums;
+    }
+
     .canvas-wrap {
       position: relative;
       min-width: 0;
       min-height: 0;
       min-height: 420px;
-      border: 1px solid #2f3440;
+      border: 1px solid #333a46;
       border-radius: var(--radius);
       overflow: hidden;
       background:
@@ -294,6 +376,7 @@
         #111217;
       background-size: 32px 32px;
       background-position: 0 0, 0 16px, 16px -16px, -16px 0;
+      box-shadow: 0 18px 60px rgba(0,0,0,.26);
     }
 
     canvas {
@@ -360,6 +443,8 @@
 
       .actions {
         margin-top: 0;
+        position: static;
+        background: transparent;
       }
     }
   </style>
@@ -370,24 +455,48 @@
       <div class="brand">
         <div class="mark" aria-hidden="true"></div>
         <div>
+          <p class="eyebrow">Broken Mirror</p>
           <h1>镜面破碎效果生成器</h1>
-          <p class="hint">上传图片后，在画面上点击破碎中心。</p>
+          <p class="hint">上传图片，放置破碎点，再导出合成图或分层素材。</p>
         </div>
       </div>
 
-      <section class="section file">
-        <p class="section-title">图片</p>
+      <section class="section file compact">
+        <div class="section-header">
+          <div>
+            <p class="section-title">开始</p>
+            <p class="section-desc">上传图片，或先用示例测试效果。</p>
+          </div>
+        </div>
         <input id="fileInput" type="file" accept="image/*">
-        <button class="btn" id="loadDemo" type="button">载入示例</button>
-        <p class="section-title">破碎点</p>
+        <div class="button-row">
+          <button class="btn subtle" id="loadDemo" type="button">载入示例</button>
+          <button class="btn subtle" id="randomize" type="button">重生成</button>
+        </div>
+      </section>
+
+      <section class="section compact">
+        <div class="section-header">
+          <div>
+            <p class="section-title">破碎点</p>
+            <p class="section-desc">选择单个点后，点击画面可移动位置。</p>
+          </div>
+        </div>
         <div class="impact-tabs" id="impactTabs" aria-label="破碎点列表"></div>
-        <button class="btn" id="addImpact" type="button">新增破碎点</button>
-        <button class="btn" id="deleteImpact" type="button">删除当前破碎点</button>
-        <p class="hint">也可以把图片拖到右侧画布。</p>
+        <div class="button-row">
+          <button class="btn primary" id="addImpact" type="button">新增破碎点</button>
+          <button class="btn danger" id="deleteImpact" type="button">删除当前</button>
+        </div>
+        <p class="mode-note" id="modeNote">等待上传图片。</p>
       </section>
 
       <section class="section">
-        <p class="section-title">裂纹</p>
+        <div class="section-header">
+          <div>
+            <p class="section-title">裂纹形态</p>
+            <p class="section-desc">控制裂缝数量、粗细、破洞形状和照片错位。</p>
+          </div>
+        </div>
         <div class="control">
           <label for="randomSeed">随机种子 <span class="value" id="randomSeedValue">500</span></label>
           <input id="randomSeed" type="range" min="1" max="999" value="500">
@@ -397,7 +506,7 @@
           <input id="rayCount" type="range" min="9" max="34" value="18">
         </div>
         <div class="control">
-          <label for="breakPower">碎片位移 <span class="value" id="breakPowerValue">18</span></label>
+          <label for="breakPower">底图错位 <span class="value" id="breakPowerValue">18</span></label>
           <input id="breakPower" type="range" min="0" max="44" value="18">
         </div>
         <div class="control">
@@ -415,7 +524,12 @@
       </section>
 
       <section class="section">
-        <p class="section-title">质感</p>
+        <div class="section-header">
+          <div>
+            <p class="section-title">颜色质感</p>
+            <p class="section-desc">设置裂纹、破洞和高光的视觉风格。</p>
+          </div>
+        </div>
         <div class="segmented" aria-label="裂缝颜色">
           <button class="active" type="button" data-crack="white">白裂</button>
           <button type="button" data-crack="dark">黑裂</button>
@@ -440,9 +554,10 @@
       </section>
 
       <div class="actions">
-        <button class="btn" id="randomize" type="button">重生成</button>
-        <button class="btn primary" id="download" type="button">导出 PNG</button>
-        <button class="btn" id="downloadLayers" type="button">导出分层 PNG</button>
+        <div class="export-actions">
+          <button class="btn primary" id="download" type="button">导出合成 PNG</button>
+          <button class="btn" id="downloadLayers" type="button">导出分层 PNG</button>
+        </div>
       </div>
       <div class="copyright">
         <span>制作者 @shiemezz</span>
@@ -453,8 +568,11 @@
 
     <section class="stage">
       <div class="toolbar">
-        <span class="status" id="status">等待上传图片</span>
-        <span id="sizeLabel">-</span>
+        <span class="status">
+          <strong>预览画布</strong>
+          <span id="status">等待上传图片</span>
+        </span>
+        <span class="canvas-size" id="sizeLabel">-</span>
       </div>
       <div class="canvas-wrap" id="canvasWrap">
         <canvas id="canvas"></canvas>
@@ -479,6 +597,7 @@
     const impactTabs = document.getElementById('impactTabs');
     const addImpact = document.getElementById('addImpact');
     const deleteImpact = document.getElementById('deleteImpact');
+    const modeNote = document.getElementById('modeNote');
 
     const controls = {
       rayCount: document.getElementById('rayCount'),
@@ -619,7 +738,7 @@
       allButton.disabled = !centers.length;
       allButton.addEventListener('click', () => {
         selectedImpactIndex = -1;
-        addingImpact = true;
+        addingImpact = false;
         setControlsFromSettings(getSelectedSettings());
         renderImpactTabs();
         draw();
@@ -639,8 +758,18 @@
         });
         impactTabs.appendChild(button);
       });
-      addImpact.textContent = addingImpact ? '点击画面放置新破碎点' : '新增破碎点';
+      addImpact.textContent = addingImpact ? '点击画面放置' : '新增破碎点';
       deleteImpact.disabled = centers.length <= 1 || selectedImpactIndex === -1 || addingImpact;
+      if (!modeNote) return;
+      if (!sourceImage) {
+        modeNote.textContent = '上传或拖入图片后开始编辑。';
+      } else if (addingImpact || !centers.length) {
+        modeNote.textContent = '放置模式：点击右侧画面新增破碎点。';
+      } else if (selectedImpactIndex === -1) {
+        modeNote.textContent = '全局模式：当前参数会应用到所有破碎点。';
+      } else {
+        modeNote.textContent = `编辑破碎点 ${selectedImpactIndex + 1}：点击画面可移动它。`;
+      }
     }
 
     function updateValues() {
@@ -1392,6 +1521,7 @@
       if (!sourceImage) {
         dropNote.classList.remove('hidden');
         sizeLabel.textContent = '-';
+        renderImpactTabs();
         return;
       }
 
@@ -1403,6 +1533,7 @@
       if (!centers.length) {
         drawImageFitted();
         statusEl.textContent = '点击图片上的破碎中心';
+        renderImpactTabs();
         return;
       }
 
@@ -1461,7 +1592,10 @@
       });
       ctx.restore();
 
-      statusEl.textContent = `破碎点：${centers.length} 个`;
+      statusEl.textContent = selectedImpactIndex === -1
+        ? `全局调整：${centers.length} 个破碎点`
+        : `正在编辑破碎点 ${selectedImpactIndex + 1} / ${centers.length}`;
+      renderImpactTabs();
     }
 
     function loadFile(file) {
@@ -1560,8 +1694,11 @@
       const rect = canvas.getBoundingClientRect();
       const x = event.clientX - rect.left;
       const y = event.clientY - rect.top;
-      if (addingImpact || selectedImpactIndex === -1 || !centers.length) {
+      if (addingImpact || !centers.length) {
         addCenterFromCanvasPoint(x, y);
+      } else if (selectedImpactIndex === -1) {
+        statusEl.textContent = '请先选择单个破碎点，或点击“新增破碎点”。';
+        return;
       } else {
         moveSelectedCenterToCanvasPoint(x, y);
       }
